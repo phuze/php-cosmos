@@ -118,6 +118,17 @@ class CosmosDb
             (array)$this->httpClientOptions
         ));
 
+        /*
+        # blr07 debug
+        echo "=============== DEBUG (CosmosDb::request) ===============".PHP_EOL;
+        echo json_encode([
+            'method'        => $method,
+            'config'        => array_merge($options,(array)$this->httpClientOptions),
+            'requestUrl'    => "{$this->host}{$path}",
+            'response'      => json_encode($response->getBody()->getContents()),
+        ], JSON_PRETTY_PRINT).PHP_EOL;
+        */
+
         return $response->getBody()->getContents();
     }
 
@@ -194,6 +205,14 @@ class CosmosDb
         }
         catch (\GuzzleHttp\Exception\ClientException $e) {
             $responseError = \json_decode($e->getResponse()->getBody()->getContents());
+
+            /*
+            # blr07 debug
+            echo "=============== DEBUG (CosmosDb::query) ===============".PHP_EOL;
+            echo json_encode([
+                'responseError' => $responseError,
+            ], JSON_PRETTY_PRINT).PHP_EOL;
+            */
 
             // -- Retry the request with PK Ranges --
             // The provided cross partition query can not be directly served by the gateway.
@@ -568,6 +587,17 @@ class CosmosDb
         if ($partitionKey !== null) {
             $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
         }
+
+        /*
+        # blr07 debug
+        echo "=============== DEBUG (CosmosDb::deleteDocument) ===============".PHP_EOL;
+        echo json_encode([
+            'method'        => "DELETE",
+            'path'          => "/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}",
+            '$authHeaders'  => $authHeaders,
+            '$headers'      => $headers,
+        ], JSON_PRETTY_PRINT).PHP_EOL;
+        */
 
         return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "DELETE", $headers);
     }
