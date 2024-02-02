@@ -62,7 +62,7 @@ class QueryBuilder
     }
 
     /**
-     * @param string|array $fields
+     * @param array|string $fields
      * @return $this
      */
     public function select($fields)
@@ -77,7 +77,7 @@ class QueryBuilder
      * @param string $from
      * @return $this
      */
-    public function from($from)
+    public function from(string $from)
     {
         $this->from = $from;
         return $this;
@@ -87,7 +87,7 @@ class QueryBuilder
      * @param string $join
      * @return $this
      */
-    public function join($join)
+    public function join(string $join)
     {
         $this->join .= " {$join} ";
         return $this;
@@ -97,7 +97,7 @@ class QueryBuilder
      * @param string $where
      * @return $this
      */
-    public function where($where)
+    public function where(string $where)
     {
         if (empty($where)) return $this;
         $this->where .= !empty($this->where) ? " and {$where} " : "{$where}";
@@ -107,31 +107,31 @@ class QueryBuilder
 
     /**
      * @param string $field
-     * @param string $value
+     * @param mixed $value
      * @return QueryBuilder
      */
-    public function whereStartsWith($field, $value)
+    public function whereStartsWith(string $field, $value)
 	{
 		return $this->where("STARTSWITH($field, '{$value}')");
 	}
 
     /**
      * @param string $field
-     * @param string $value
+     * @param mixed $value
      * @return QueryBuilder
      */
-    public function whereEndsWith($field, $value)
-	{
+    public function whereEndsWith(string $field, $value)
+    {
 		return $this->where("ENDSWITH($field, '{$value}')");
 	}
 
     /**
      * @param string $field
-     * @param string $value
+     * @param mixed $value
      * @return QueryBuilder
      */
-    public function whereContains($field, $value)
-	{
+    public function whereContains(string $field, $value)
+    {
 		return $this->where("CONTAINS($field, '{$value}'");
 	}
 
@@ -140,12 +140,11 @@ class QueryBuilder
      * @param array $values
      * @return $this|QueryBuilder
      */
-    public function whereIn($field, $values)
+    public function whereIn(string $field, array $values)
 	{
-	    if (!is_array($values) || empty($values)) return $this;
-		if (is_array($values)) $values = implode("', '", $values);
+	    if (empty($values)) return $this;
 
-		return $this->where("$field IN('{$values}')");
+		return $this->where("$field IN('".implode("', '", $values)."')");
 	}
 
     /**
@@ -153,19 +152,18 @@ class QueryBuilder
      * @param array $values
      * @return $this|QueryBuilder
      */
-    public function whereNotIn($field, $values)
+    public function whereNotIn(string $field, array $values)
     {
-        if (!is_array($values) || empty($values)) return $this;
-        if (is_array($values)) $values = implode("', '", $values);
+        if (empty($values)) return $this;
 
-        return $this->where("$field NOT IN('{$values}')");
+        return $this->where("$field NOT IN('".implode("', '", $values)."')");
     }
 
     /**
      * @param string $order
      * @return $this
      */
-    public function order($order)
+    public function order(string $order)
     {
         $this->order = $order;
         return $this;
@@ -175,9 +173,9 @@ class QueryBuilder
      * @param int $limit
      * @return $this
      */
-    public function limit($limit)
+    public function limit(int $limit)
     {
-        $this->limit = (int)$limit;
+        $this->limit = $limit;
         return $this;
     }
 
@@ -185,9 +183,9 @@ class QueryBuilder
      * @param array $params
      * @return $this
      */
-    public function params($params)
+    public function params(array $params)
     {
-        $this->params = (array)$params;
+        $this->params = $params;
         return $this;
     }
 
@@ -195,7 +193,7 @@ class QueryBuilder
      * @param boolean $isCrossPartition
      * @return $this
      */
-    public function findAll($isCrossPartition = false)
+    public function findAll(bool $isCrossPartition = false)
     {
         $this->response = null;
         $this->multipleResults = true;
@@ -218,7 +216,7 @@ class QueryBuilder
      * @param boolean $isCrossPartition
      * @return $this
      */
-    public function find($isCrossPartition = false)
+    public function find(bool $isCrossPartition = false)
     {
         $this->response = null;
         $this->multipleResults = false;
@@ -232,21 +230,6 @@ class QueryBuilder
         $query = "SELECT top 1 {$fields} FROM {$this->from} {$this->join} {$where} {$order}";
 
         $this->response = $this->collection->query($query, $this->params, $isCrossPartition, $partitionValue);
-
-        return $this;
-    }
-
-    /* insert / update */
-
-    /**
-     * @param $document
-     * @return $this
-     */
-    public function setDocument($document)
-    {
-        if (is_array($document) || is_object($document)) {
-            $this->document = json_encode($document);
-        }
 
         return $this;
     }
@@ -290,26 +273,26 @@ class QueryBuilder
 	}
 
     /**
-     * @param $fieldName
+     * @param string $fieldName
      * @return $this
      */
-    public function setQueryString(string $string)
+    public function setQueryString(string $fieldName)
     {
-        $this->queryString .= $string;
+        $this->queryString .= $fieldName;
         return $this;
     }
 
     /**
-     * @return null
+     * @return string|null
      */
     public function getQueryString()
-	{
+    {
 		return $this->queryString;
 	}
 
     /**
-     * @param boolean $isCrossPartition
-     * @return $this
+     * @param string $partitionKey
+     * @return bool
      */
     public function isNested(string $partitionKey)
     {
@@ -489,7 +472,7 @@ class QueryBuilder
      * @param boolean $isCrossPartition
      * @return boolean
      */
-    public function deleteAll($isCrossPartition = false)
+    public function deleteAll(bool $isCrossPartition = false)
     {
         $this->response = null;
 
@@ -515,7 +498,7 @@ class QueryBuilder
      * @return QueryBuilder
      * @throws \Exception
      */
-    public function addTrigger(string $operation, string $type, string $id): self
+    public function addTrigger(string $operation, string $type, string $id)
     {
         $operation = \strtolower($operation);
         if (!\in_array($operation, ["all", "create", "delete", "replace"]))
@@ -536,7 +519,7 @@ class QueryBuilder
      * @param string $operation
      * @return array
      */
-    protected function triggersAsHeaders(string $operation): array
+    protected function triggersAsHeaders(string $operation)
     {
         $headers = [];
 
@@ -567,39 +550,73 @@ class QueryBuilder
      */
     public function toJson()
     {
-        return $this->response;
-    }
-
-    /**
-     * @return mixed
-     */
-    public function toObject()
-    {
-        $res = json_decode($this->response);
-        $docs = $res->Documents ?? [];
-        if (!is_array($docs) || empty($docs)) return [];
-
-        if ($this->multipleResults) {
-            return $docs;
+        /*
+         * If the CosmosDB result set contains many documents, CosmosDB might apply pagination. If this is detected,
+         * all pages are requested one by one, until all results are loaded. These individual responses are contained
+         * in $this->response. If no pagination is applied, $this->response is an array containing a single response.
+         *
+         * $results holds the documents returned by each of the responses.
+         */
+        $results = [
+            '_rid' => '',
+            '_count' => 0,
+            'Documents' => []
+        ];
+        foreach ($this->response as $response) {
+            $res = json_decode($response);
+            $results['_rid'] = $res->_rid;
+            $results['_count'] = $results['_count'] + $res->_count;
+            $docs = $res->Documents ?? [];
+            $results['Documents'] = array_merge($results['Documents'], $docs);
         }
-
-        return isset($docs[0]) ? $docs[0] : null;
+        return json_encode($results);
     }
 
     /**
      * @param $arrayKey
-     * @return array|mixed
+     * @return mixed
+     */
+    public function toObject($arrayKey = null)
+    {
+        /*
+         * If the CosmosDB result set contains many documents, CosmosDB might apply pagination. If this is detected,
+         * all pages are requested one by one, until all results are loaded. These individual responses are contained
+         * in $this->response. If no pagination is applied, $this->response is an array containing a single response.
+         *
+         * $results holds the documents returned by each of the responses.
+         */
+        $results = [];
+        foreach ((array)$this->response as $response) {
+            $res = json_decode($response);
+            if (isset($res->Documents)) {
+                array_push($results, ...$res->Documents);
+            } else {
+                $results[] = $res;
+            }
+        }
+
+        if ($this->multipleResults && $arrayKey != null) {
+            $results = array_combine(array_column($results, $arrayKey), $results);
+        }
+
+        return $this->multipleResults ? $results : ($results[0] ?? null);
+    }
+
+    /**
+     * @param $arrayKey
+     * @return array|null
      */
     public function toArray($arrayKey = null)
     {
-        $res = json_decode($this->response);
-        $docs = $res->Documents ?? [];
+        $results = (array)$this->toObject($arrayKey);
 
-        if ($this->multipleResults) {
-            return $arrayKey != null ? array_combine(array_column($docs, $arrayKey), $docs) : $docs;
+        if ($this->multipleResults && is_array($results)) {
+            array_walk($results, function(&$value) {
+                $value = (array)$value;
+            });
         }
 
-        return isset($docs[0]) ? $docs[0] : null;
+        return $this->multipleResults ? $results : ((array)$results ?? null);
     }
 
     /**

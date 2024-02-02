@@ -24,26 +24,26 @@ namespace Jupitern\CosmosDb;
  * @link https://github.com/jupitern/cosmosdb
  */
 
+use GuzzleHttp\Exception\GuzzleException;
+use Psr\Http\Message\ResponseInterface;
+
 class CosmosDb
 {
-    private $host;
-    private $private_key;
-    private $debug;
-    public $httpClientOptions = true;
+    private string $host;
+    private string $private_key;
+    public array $httpClientOptions;
 
     /**
      * __construct
      *
      * @access public
-     * @param string $host: URI of hostname
-     * @param string $private_key: Primary (or Secondary key) private key
-     * @param bool $debug: return Response Headers and JSON(if you need), false(default): return JSON only
+     * @param string $host URI of hostname
+     * @param string $private_key Primary (or Secondary key) private key
      */
-    public function __construct($host, $private_key, $debug = false)
+    public function __construct(string $host, string $private_key)
     {
         $this->host = $host;
         $this->private_key = $private_key;
-        $this->debug = $debug;
     }
 
     /**
@@ -51,7 +51,7 @@ class CosmosDb
      *
      * @param array $options
      */
-    public function setHttpClientOptions($options = [])
+    public function setHttpClientOptions(array $options = [])
     {
         $this->httpClientOptions = $options;
     }
@@ -66,12 +66,12 @@ class CosmosDb
      * @param string $resource_id Resource ID
      * @return array of Request Headers
      */
-    private function getAuthHeaders($verb, $resource_type, $resource_id)
+    private function getAuthHeaders(string $verb, string $resource_type, string $resource_id)
     {
         $x_ms_date = gmdate('D, d M Y H:i:s T', strtotime('+2 minutes'));
         $master = 'master';
         $token = '1.0';
-        $x_ms_version = '2017-02-22';
+        $x_ms_version = '2018-12-31';
 
         $key = base64_decode($this->private_key);
         $string_to_sign = $verb . "\n" .
@@ -102,9 +102,10 @@ class CosmosDb
      * @param string $method request method
      * @param array $headers request headers
      * @param string $body request body (JSON or QUERY)
-     * @return string JSON response
+     * @return ResponseInterface JSON response
+     * @throws GuzzleException
      */
-    private function request($path, $method, $headers, $body = NULL)
+    private function request(string $path, string $method, array $headers, $body = NULL)
     {
         $client = new \GuzzleHttp\Client();
 
@@ -137,12 +138,14 @@ class CosmosDb
      *
      * @access public
      * @param string $db_name Database name
-     * @return CosmosDbDatabase class
+     * @return ?CosmosDbDatabase class
+     * @throws GuzzleException
      */
-    public function selectDB($db_name)
+    public function selectDB(string $db_name)
     {
         $rid_db = false;
         $object = json_decode($this->listDatabases());
+
         $db_list = $object->Databases;
         for ($i = 0; $i < count($db_list); $i++) {
             if ($db_list[$i]->id === $db_name) {
@@ -153,11 +156,8 @@ class CosmosDb
             $object = json_decode($this->createDatabase('{"id":"' . $db_name . '"}'));
             $rid_db = $object->_rid;
         }
-        if ($rid_db) {
-            return new CosmosDbDatabase($this, $rid_db);
-        } else {
-            return false;
-        }
+
+        return $rid_db ? new CosmosDbDatabase($this, $rid_db) : null;
     }
 
     /**
@@ -165,12 +165,13 @@ class CosmosDb
      *
      * @access public
      * @return string JSON response
+     * @throws GuzzleException
      */
     public function getInfo()
     {
         $headers = $this->getAuthHeaders('GET', '', '');
         $headers['Content-Length'] = '0';
-        return $this->request("", "GET", $headers);
+        return $this->request("", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -182,9 +183,10 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $query Query
      * @param boolean $isCrossPartition used for cross partition query
-     * @return string JSON response
+     * @return array JSON response
+     * @throws GuzzleException
      */
-	public function query($rid_id, $rid_col, $query, $isCrossPartition = false, $partitionValue = null)
+	public function query(string $rid_id, string $rid_col, string $query, bool $isCrossPartition = false, $partitionValue = null)
 	{
         $headers = $this->getAuthHeaders('POST', 'docs', $rid_col);
         $headers['Content-Length'] = strlen($query);
@@ -199,9 +201,26 @@ class CosmosDb
         if ($partitionValue) {
             $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionValue.'"]';
         }
-        
+        /*
+         * Fix for https://github.com/jupitern/cosmosdb/issues/21 (credits to https://github.com/ElvenSpellmaker).
+         *
+         * CosmosDB has a max packet size of 4MB and will automatically paginate after that, regardless of x-ms-max-items.
+         * If this is the case, a 'x-ms-continuation'-header will be present in the response headers. The value of this
+         * header will be a continuation token. If this header is detected, we can rerun our query with an additional
+         * 'x-ms-continuation' request header, with the continuation token we received earlier as its value.
+         *
+         * This fix checks if this header is present on the response headers and handles the additional requests, untill
+         * all results are loaded.
+         */
+        $results = [];
         try {
             $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
+            $results[] = $result->getBody()->getContents();
+            while ($result->getHeader('x-ms-continuation') !== []) {
+                $headers['x-ms-continuation'] = $result->getHeader('x-ms-continuation');
+                $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
+                $results[] = $result->getBody()->getContents();
+            }
         }
         catch (\GuzzleHttp\Exception\ClientException $e) {
             $responseError = \json_decode($e->getResponse()->getBody()->getContents());
@@ -227,37 +246,37 @@ class CosmosDb
             }
         }
 
-        return $result;
-	}
+        return $results;
+    }
 
-	/**
-	 * getPkRanges
-	 *
-	 * @param      $rid_id
-	 * @param      $rid_col
-	 * @param bool $raw
-	 *
-	 * @return mixed|string
-	 */
-	public function getPkRanges($rid_id, $rid_col)
-	{
+    /**
+     * getPkRanges
+     *
+     * @param string $rid_id
+     * @param string $rid_col
+     * @return mixed
+     * @throws GuzzleException
+     */
+	public function getPkRanges(string $rid_id, string $rid_col)
+    {
 		$headers = $this->getAuthHeaders('GET', 'pkranges', $rid_col);
 		$headers['Accept'] = 'application/json';
 		$headers['x-ms-max-item-count'] = -1;
 		$result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/pkranges", "GET", $headers);
-		return json_decode($result);
+		return json_decode($result->getBody()->getContents());
 	}
 
-	/**
-	 * getPkFullRange
-	 *
-	 * @param $rid_id
-	 * @param $rid_col
-	 *
-	 * @return string
-	 */
+    /**
+     * getPkFullRange
+     *
+     * @param $rid_id
+     * @param $rid_col
+     *
+     * @return string
+     * @throws GuzzleException
+     */
 	public function getPkFullRange($rid_id, $rid_col)
-	{
+    {
 		$result = $this->getPkRanges($rid_id, $rid_col);
 		$ids = \array_column($result->PartitionKeyRanges, "id");
 		return $result->_rid . "," . \implode(",", $ids);
@@ -269,12 +288,13 @@ class CosmosDb
      * @link http://msdn.microsoft.com/en-us/library/azure/dn803945.aspx
      * @access public
      * @return string JSON response
+     * @throws GuzzleException
      */
     public function listDatabases()
     {
         $headers = $this->getAuthHeaders('GET', 'dbs', '');
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs", "GET", $headers);
+        return $this->request("/dbs", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -284,12 +304,13 @@ class CosmosDb
      * @access public
      * @param string $rid_id Resource ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function getDatabase($rid_id)
+    public function getDatabase(string $rid_id)
     {
         $headers = $this->getAuthHeaders('GET', 'dbs', $rid_id);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -299,12 +320,13 @@ class CosmosDb
      * @access public
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createDatabase($json)
+    public function createDatabase(string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'dbs', '');
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs", "POST", $headers, $json);
+        return $this->request("/dbs", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -315,12 +337,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceDatabase($rid_id, $json)
+    public function replaceDatabase(string $rid_id, string $json)
     {
         $headers = $this->getAuthHeaders('PUT', 'dbs', $rid_id);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}", "PUT", $headers, $json);
+        return $this->request("/dbs/{$rid_id}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -331,11 +354,11 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @return string JSON response
      */
-    public function deleteDatabase($rid_id)
+    public function deleteDatabase(string $rid_id)
     {
         $headers = $this->getAuthHeaders('DELETE', 'dbs', $rid_id);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -345,12 +368,13 @@ class CosmosDb
      * @access public
      * @param string $rid_id Resource ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listUsers($rid_id)
+    public function listUsers(string $rid_id)
     {
         $headers = $this->getAuthHeaders('GET', 'users', $rid_id);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/users", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -361,12 +385,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_user Resource User ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function getUser($rid_id, $rid_user)
+    public function getUser(string $rid_id, string $rid_user)
     {
         $headers = $this->getAuthHeaders('GET', 'users', $rid_user);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -377,12 +402,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createUser($rid_id, $json)
+    public function createUser(string $rid_id, string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'users', $rid_id);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/users", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -394,12 +420,13 @@ class CosmosDb
      * @param string $rid_user Resource User ID
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceUser($rid_id, $rid_user, $json)
+    public function replaceUser(string $rid_id, string $rid_user, string $json)
     {
         $headers = $this->getAuthHeaders('PUT', 'users', $rid_user);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "PUT", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -410,12 +437,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_user Resource User ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deleteUser($rid_id, $rid_user)
+    public function deleteUser(string $rid_id, string $rid_user)
     {
         $headers = $this->getAuthHeaders('DELETE', 'users', $rid_user);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -425,12 +453,13 @@ class CosmosDb
      * @access public
      * @param string $rid_id Resource ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listCollections($rid_id)
+    public function listCollections(string $rid_id)
     {
         $headers = $this->getAuthHeaders('GET', 'colls', $rid_id);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -441,12 +470,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_col Resource Collection ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function getCollection($rid_id, $rid_col)
+    public function getCollection(string $rid_id, string $rid_col)
     {
         $headers = $this->getAuthHeaders('GET', 'colls', $rid_col);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -457,12 +487,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createCollection($rid_id, $json)
+    public function createCollection(string $rid_id, string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'colls', $rid_id);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -473,12 +504,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_col Resource Collection ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deleteCollection($rid_id, $rid_col)
+    public function deleteCollection(string $rid_id, string $rid_col)
     {
         $headers = $this->getAuthHeaders('DELETE', 'colls', $rid_col);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -487,14 +519,15 @@ class CosmosDb
      * @link http://msdn.microsoft.com/en-us/library/azure/dn803955.aspx
      * @access public
      * @param string $rid_id Resource ID
-     * @param string $rid_colResource Collection ID
+     * @param string $rid_col
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listDocuments($rid_id, $rid_col)
+    public function listDocuments(string $rid_id, string $rid_col)
     {
         $headers = $this->getAuthHeaders('GET', 'docs', $rid_col);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -506,8 +539,9 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $rid_doc Resource Doc ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function getDocument($rid_id, $rid_col, $rid_doc)
+    public function getDocument(string $rid_id, string $rid_col, string $rid_doc)
     {
         $headers = $this->getAuthHeaders('GET', 'docs', $rid_doc);
         $headers['Content-Length'] = '0';
@@ -515,7 +549,7 @@ class CosmosDb
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_HTTPGET => true,
         );
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -526,11 +560,12 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_col Resource Collection ID
      * @param string $json JSON request
-     * @param string $partitionKey
+     * @param string|null $partitionKey
      * @param array $headers Optional headers to send along with the request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createDocument($rid_id, $rid_col, $json, $partitionKey = null, array $headers = [])
+    public function createDocument(string $rid_id, string $rid_col, string $json, string $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('POST', 'docs', $rid_col);
         $headers = \array_merge($headers, $authHeaders);
@@ -539,7 +574,7 @@ class CosmosDb
             $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
         }
 
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -551,11 +586,12 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $rid_doc Resource Doc ID
      * @param string $json JSON request
-     * @param string $partitionKey
+     * @param string|null $partitionKey
      * @param array $headers Optional headers to send along with the request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceDocument($rid_id, $rid_col, $rid_doc, $json, $partitionKey = null, array $headers = [])
+    public function replaceDocument(string $rid_id, string $rid_col, string $rid_doc, string $json, string $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('PUT', 'docs', $rid_doc);
         $headers = \array_merge($headers, $authHeaders);
@@ -564,7 +600,7 @@ class CosmosDb
             $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
         }
 
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "PUT", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -575,11 +611,12 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_col Resource Collection ID
      * @param string $rid_doc Resource Doc ID
-     * @param string $partitionKey
+     * @param string|null $partitionKey
      * @param array $headers Optional headers to send along with the request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deleteDocument($rid_id, $rid_col, $rid_doc, $partitionKey = null, array $headers = [])
+    public function deleteDocument(string $rid_id, string $rid_col, string $rid_doc, string $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('DELETE', 'docs', $rid_doc);
         $headers = \array_merge($headers, $authHeaders);
@@ -599,7 +636,7 @@ class CosmosDb
         ], JSON_PRETTY_PRINT).PHP_EOL;
         */
 
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -608,15 +645,16 @@ class CosmosDb
      * @link http://
      * @access public
      * @param string $rid_id Resource ID
-     * @param string $rid_colResource Collection ID
+     * @param string $rid_col
      * @param string $rid_doc Resource Doc ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listAttachments($rid_id, $rid_col, $rid_doc)
+    public function listAttachments(string $rid_id, string $rid_col, string $rid_doc)
     {
         $headers = $this->getAuthHeaders('GET', 'attachments', $rid_doc);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -629,12 +667,13 @@ class CosmosDb
      * @param string $rid_doc Resource Doc ID
      * @param string $rid_at Resource Attachment ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function getAttachment($rid_id, $rid_col, $rid_doc, $rid_at)
+    public function getAttachment(string $rid_id, string $rid_col, string $rid_doc, string $rid_at)
     {
         $headers = $this->getAuthHeaders('GET', 'attachments', $rid_at);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -649,14 +688,15 @@ class CosmosDb
      * @param string $filename Attachement file name
      * @param string $file URL encoded Attachement file (Raw Media)
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createAttachment($rid_id, $rid_col, $rid_doc, $content_type, $filename, $file)
+    public function createAttachment(string $rid_id, string $rid_col, string $rid_doc, string $content_type, string $filename, string $file)
     {
         $headers = $this->getAuthHeaders('POST', 'attachments', $rid_doc);
         $headers['Content-Length'] = strlen($file);
         $headers['Content-Type'] = $content_type;
         $headers['Slug'] = urlencode($filename);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments", "POST", $headers, $file);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments", "POST", $headers, $file)->getBody()->getContents();
     }
 
     /**
@@ -672,14 +712,15 @@ class CosmosDb
      * @param string $filename Attachement file name
      * @param string $file URL encoded Attachement file (Raw Media)
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceAttachment($rid_id, $rid_col, $rid_doc, $rid_at, $content_type, $filename, $file)
+    public function replaceAttachment(string $rid_id, string $rid_col, string $rid_doc, string $rid_at, string $content_type, string $filename, string $file)
     {
         $headers = $this->getAuthHeaders('PUT', 'attachments', $rid_at);
         $headers['Content-Length'] = strlen($file);
         $headers['Content-Type'] = $content_type;
         $headers['Slug'] = urlencode($filename);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "PUT", $headers, $file);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "PUT", $headers, $file)->getBody()->getContents();
     }
 
     /**
@@ -692,12 +733,13 @@ class CosmosDb
      * @param string $rid_doc Resource Doc ID
      * @param string $rid_at Resource Attachment ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deleteAttachment($rid_id, $rid_col, $rid_doc, $rid_at)
+    public function deleteAttachment(string $rid_id, string $rid_col, string $rid_doc, string $rid_at)
     {
         $headers = $this->getAuthHeaders('DELETE', 'attachments', $rid_at);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -706,12 +748,13 @@ class CosmosDb
      * @link http://
      * @access public
      * @return string JSON response
+     * @throws GuzzleException
      */
     public function listOffers()
     {
         $headers = $this->getAuthHeaders('GET', 'offers', '');
         $headers['Content-Length'] = '0';
-        return $this->request("/offers", "GET", $headers);
+        return $this->request("/offers", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -721,12 +764,13 @@ class CosmosDb
      * @access public
      * @param string $rid Resource ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function getOffer($rid)
+    public function getOffer(string $rid)
     {
         $headers = $this->getAuthHeaders('GET', 'offers', $rid);
         $headers['Content-Length'] = '0';
-        return $this->request("/offers/{$rid}", "GET", $headers);
+        return $this->request("/offers/{$rid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -737,12 +781,13 @@ class CosmosDb
      * @param string $rid Resource ID
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceOffer($rid, $json)
+    public function replaceOffer(string $rid, string $json)
     {
         $headers = $this->getAuthHeaders('PUT', 'offers', $rid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/offers/{$rid}", "PUT", $headers, $json);
+        return $this->request("/offers/{$rid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -752,14 +797,15 @@ class CosmosDb
      * @access public
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function queryingOffers($json)
+    public function queryingOffers(string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'offers', '');
         $headers['Content-Length'] = strlen($json);
         $headers['Content-Type'] = 'application/query+json';
         $headers['x-ms-documentdb-isquery'] = 'True';
-        return $this->request("/offers", "POST", $headers, $json);
+        return $this->request("/offers", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -770,12 +816,13 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_user Resource User ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listPermissions($rid_id, $rid_user)
+    public function listPermissions(string $rid_id, string $rid_user)
     {
         $headers = $this->getAuthHeaders('GET', 'permissions', $rid_user);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -787,12 +834,13 @@ class CosmosDb
      * @param string $rid_user Resource User ID
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createPermission($rid_id, $rid_user, $json)
+    public function createPermission(string $rid_id, string $rid_user, string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'permissions', $rid_user);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -804,12 +852,13 @@ class CosmosDb
      * @param string $rid_user Resource User ID
      * @param string $rid_permission Resource Permission ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function getPermission($rid_id, $rid_user, $rid_permission)
+    public function getPermission(string $rid_id, string $rid_user, string $rid_permission)
     {
         $headers = $this->getAuthHeaders('GET', 'permissions', $rid_permission);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -822,12 +871,13 @@ class CosmosDb
      * @param string $rid_permission Resource Permission ID
      * @param string $json JSON request
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replacePermission($rid_id, $rid_user, $rid_permission, $json)
+    public function replacePermission(string $rid_id, string $rid_user, string $rid_permission, string $json)
     {
         $headers = $this->getAuthHeaders('PUT', 'permissions', $rid_permission);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "PUT", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -839,12 +889,13 @@ class CosmosDb
      * @param string $rid_user Resource User ID
      * @param string $rid_permission Resource Permission ID
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deletePermission($rid_id, $rid_user, $rid_permission)
+    public function deletePermission(string $rid_id, string $rid_user, string $rid_permission)
     {
         $headers = $this->getAuthHeaders('DELETE', 'permissions', $rid_permission);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -853,14 +904,15 @@ class CosmosDb
      * @link http://
      * @access public
      * @param string $rid_id Resource ID
-     * @param string $rid_colResource Collection ID
+     * @param string $rid_col
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listStoredProcedures($rid_id, $rid_col)
+    public function listStoredProcedures(string $rid_id, string $rid_col)
     {
         $headers = $this->getAuthHeaders('GET', 'sprocs', $rid_col);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -873,12 +925,13 @@ class CosmosDb
      * @param string $rid_sproc Resource ID of Stored Procedurea
      * @param string $json Parameters
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function executeStoredProcedure($rid_id, $rid_col, $rid_sproc, $json)
+    public function executeStoredProcedure(string $rid_id, string $rid_col, string $rid_sproc, string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'sprocs', $rid_sproc);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -890,12 +943,13 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $json JSON of function
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createStoredProcedure($rid_id, $rid_col, $json)
+    public function createStoredProcedure(string $rid_id, string $rid_col, string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'sprocs', $rid_col);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -908,12 +962,13 @@ class CosmosDb
      * @param string $rid_sproc Resource ID of Stored Procedurea
      * @param string $json Parameters
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceStoredProcedure($rid_id, $rid_col, $rid_sproc, $json)
+    public function replaceStoredProcedure(string $rid_id, string $rid_col, string $rid_sproc, string $json)
     {
         $headers = $this->getAuthHeaders('PUT', 'sprocs', $rid_sproc);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "PUT", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -925,12 +980,13 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $rid_sproc Resource ID of Stored Procedurea
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deleteStoredProcedure($rid_id, $rid_col, $rid_sproc)
+    public function deleteStoredProcedure(string $rid_id, string $rid_col, string $rid_sproc)
     {
         $headers = $this->getAuthHeaders('DELETE', 'sprocs', $rid_sproc);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -939,14 +995,15 @@ class CosmosDb
      * @link http://
      * @access public
      * @param string $rid_id Resource ID
-     * @param string $rid_colResource Collection ID
+     * @param string $rid_col
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listUserDefinedFunctions($rid_id, $rid_col)
+    public function listUserDefinedFunctions(string $rid_id, string $rid_col)
     {
         $headers = $this->getAuthHeaders('GET', 'udfs', $rid_col);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -958,12 +1015,13 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $json JSON of function
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createUserDefinedFunction($rid_id, $rid_col, $json)
+    public function createUserDefinedFunction(string $rid_id, string $rid_col, string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'udfs', $rid_col);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -976,12 +1034,13 @@ class CosmosDb
      * @param string $rid_udf Resource ID of User Defined Function
      * @param string $json Parameters
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceUserDefinedFunction($rid_id, $rid_col, $rid_udf, $json)
+    public function replaceUserDefinedFunction(string $rid_id, string $rid_col, string $rid_udf, string $json)
     {
         $headers = $this->getAuthHeaders('PUT', 'udfs', $rid_udf);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs/{$rid_udf}", "PUT", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs/{$rid_udf}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -993,12 +1052,13 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $rid_udf Resource ID of User Defined Function
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deleteUserDefinedFunction($rid_id, $rid_col, $rid_udf)
+    public function deleteUserDefinedFunction(string $rid_id, string $rid_col, string $rid_udf)
     {
         $headers = $this->getAuthHeaders('DELETE', 'udfs', $rid_udf);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs/{$rid_udf}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs/{$rid_udf}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -1007,14 +1067,15 @@ class CosmosDb
      * @link http://
      * @access public
      * @param string $rid_id Resource ID
-     * @param string $rid_colResource Collection ID
+     * @param string $rid_col
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function listTriggers($rid_id, $rid_col)
+    public function listTriggers(string $rid_id, string $rid_col)
     {
         $headers = $this->getAuthHeaders('GET', 'triggers', $rid_col);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers", "GET", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -1026,12 +1087,13 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $json JSON of function
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function createTrigger($rid_id, $rid_col, $json)
+    public function createTrigger(string $rid_id, string $rid_col, string $json)
     {
         $headers = $this->getAuthHeaders('POST', 'triggers', $rid_col);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers", "POST", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -1044,12 +1106,13 @@ class CosmosDb
      * @param string $rid_trigger Resource ID of Trigger
      * @param string $json Parameters
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function replaceTrigger($rid_id, $rid_col, $rid_trigger, $json)
+    public function replaceTrigger(string $rid_id, string $rid_col, string $rid_trigger, string $json)
     {
         $headers = $this->getAuthHeaders('PUT', 'triggers', $rid_trigger);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers/{$rid_trigger}", "PUT", $headers, $json);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers/{$rid_trigger}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -1061,12 +1124,13 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $rid_trigger Resource ID of Trigger
      * @return string JSON response
+     * @throws GuzzleException
      */
-    public function deleteTrigger($rid_id, $rid_col, $rid_trigger)
+    public function deleteTrigger(string $rid_id, string $rid_col, string $rid_trigger)
     {
         $headers = $this->getAuthHeaders('DELETE', 'triggers', $rid_trigger);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers/{$rid_trigger}", "DELETE", $headers);
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers/{$rid_trigger}", "DELETE", $headers)->getBody()->getContents();
     }
 
 }
