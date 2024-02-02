@@ -26,9 +26,9 @@ namespace Jupitern\CosmosDb;
 
 class CosmosDbCollection
 {
-    private $document_db;
-    private $rid_db;
-    private $rid_col;
+    private CosmosDb $document_db;
+    private string $rid_db;
+    private string $rid_col;
 
     /**
      * __construct
@@ -38,7 +38,7 @@ class CosmosDbCollection
      * @param string $rid_db Database ID
      * @param string $rid_col Collection ID
      */
-    public function __construct($document_db, $rid_db, $rid_col)
+    public function __construct(CosmosDb $document_db, string $rid_db, string $rid_col)
     {
         $this->document_db = $document_db;
         $this->rid_db = $rid_db;
@@ -51,7 +51,7 @@ class CosmosDbCollection
      * @param string $query Query
      * @param array $params
      * @param boolean $isCrossPartition used for cross partition query
-     * @return string JSON strings
+     * @return array JSON strings
      */
     public function query($query, $params = [], $isCrossPartition = false, $partitionValue = null)
     {
@@ -179,7 +179,7 @@ class CosmosDbCollection
 
     public function deleteStoredProcedure($sproc_name)
     {
-        return $this->document_db->deleteStoredProcedure($this->rid_db, $this->rid_col, $sporc_name);
+        return $this->document_db->deleteStoredProcedure($this->rid_db, $this->rid_col, $sproc_name);
     }
 
     public function listUserDefinedFunctions()
