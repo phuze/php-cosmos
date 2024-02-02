@@ -60,16 +60,18 @@ Or adding it to your composer.json file:
 ### Connecting
 
 ```php
-$conn = new \Phuze\PhpCosmos\CosmosDb('hostName', 'primaryKey');
+use \Phuze\PhpCosmos\CosmosDb;
+
+$conn = new CosmosDb('host', 'key');
 $conn->setHttpClientOptions(['verify' => false]); # optional: set guzzle client options.
-$db = $conn->selectDB('dbName');
+$db = $conn->selectDB('databaseName');
 $collection = $db->selectCollection('collectionName');
 
 # if a collection does not exist, it will be created when you
 # attempt to select the collection. however, if you have created
 # your database with shared throughput, then all collections require a partition key.
 # selectCollection() supports a second parameter for this purpose.
-$conn = new \Phuze\PhpCosmos\CosmosDb('hostName', 'primaryKey');
+$conn = new CosmosDb('host', 'key');
 $conn->setHttpClientOptions(['verify' => false]); # optional: set guzzle client options.
 $db = $conn->selectDB('dbName');
 $collection = $db->selectCollection('collectionName', 'myPartitionKey');
@@ -79,12 +81,6 @@ $collection = $db->selectCollection('collectionName', 'myPartitionKey');
 
 ```php
 use \Phuze\PhpCosmos\QueryBuilder;
-
-# connect
-$conn = new \Phuze\PhpCosmos\CosmosDb('host', 'pk');
-$conn->setHttpClientOptions(['verify' => false]); // optional: set guzzle client options.
-$db = $conn->selectDB('dbName');
-$collection = $db->selectCollection('collectionName');
 
 # consider a existing collection called "Users" with a partition key "country"
 
