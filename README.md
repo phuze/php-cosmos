@@ -35,7 +35,7 @@ Or adding it to your composer.json file:
 - bug fixes
 
 ### v2.5.0
-- support partitioned queries using new method "setPartitionValue()"
+- support partitioned queries using new method `setPartitionValue()`
 - support creating partitioned collections
 - support for nested partition keys
 
