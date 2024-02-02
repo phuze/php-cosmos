@@ -238,9 +238,36 @@ class CosmosDb
             // This is a first chance (internal) exception that all newer clients will know how to
             // handle gracefully. This exception is traced, but unless you see it bubble up as an
             // exception (which only happens on older SDK clients), then you can safely ignore this message.
-            if ($isCrossPartition && $responseError->code === "BadRequest" && strpos($responseError->message, "cross partition query can not be directly served by the gateway") !== false) {
-                $headers["x-ms-documentdb-partitionkeyrangeid"] = $this->getPkFullRange($rid_id, $rid_col);
-                $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
+            if ($isCrossPartition && $responseError->code === "BadRequest" && strpos($responseError->message, "cross partition query can not be directly served by the gateway") !== false)
+            {
+                $fullRange = $this->getPkFullRange($rid_id, $rid_col);
+
+                // explode range ids into array.
+                // remove first element if its an id; ie: "z6odAJjXSto="
+                $rangeIds = explode(",", $fullRange);
+                if(!is_numeric($rangeIds[0])) {
+                    array_shift($rangeIds);
+                }
+
+                // iterate through each range id and fetch results
+                $results = [];
+                foreach($rangeIds as $id) {
+                    $headers["x-ms-documentdb-partitionkeyrangeid"] = $id;
+                    $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
+                    $results[] = $result->getBody()->getContents();            
+                }
+
+                /*
+                # blr07 debug
+                echo "=============== DEBUG (CosmosDb::query) ===============".PHP_EOL;
+                echo json_encode([
+                    'headers' => $headers,
+                    'responseError' => $responseError,
+                    'getPkFullRange' => $this->getPkFullRange($rid_id, $rid_col),
+                    'results' => $results,
+                ], JSON_PRETTY_PRINT).PHP_EOL;
+                */
+
             } else {
                 throw $e;
             }
