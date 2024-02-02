@@ -53,7 +53,7 @@ Or adding it to your composer.json file:
 ## Notes
 
 - Based on [AzureDocumentDB-PHP](https://github.com/cocteau666/AzureDocumentDB-PHP) and [CosmosDb](https://github.com/jupitern/cosmosdb).
-- Planned updates include support for new `PATCH` api operations, also known as [partial document updates](https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update).
+- Planned updates include support for new [PATCH](https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update) api operations.
 
 ## Usage
 
