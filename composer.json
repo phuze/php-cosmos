@@ -1,7 +1,7 @@
 {
   "name"       : "phuze/php-cosmos",
-  "description": "PHP wrapper for Azure Cosmos DB (formerly known as azure documentdb) using SQL rest api",
-  "keywords"   : ["azure cosmosdb", "cosmosdb", "azure documentdb", "documentdb", "cosmosdb rest", "cosmosdb sql api rest"],
+  "description": "PHP wrapper for Azure Cosmos DB using SQL rest api",
+  "keywords"   : ["azure", "cosmosdb", "sql", "nosql", "rest", "api"],
   "homepage"   : "https://github.com/phuze/php-cosmos",
   "license"    : "MIT",
   "support": {

@@ -2,6 +2,8 @@
 
 namespace Phuze\PhpCosmos;
 
+use \Exception;
+
 class QueryBuilder
 {
     private $collection = "";
@@ -385,7 +387,7 @@ class QueryBuilder
     /**
      * @param $document
      * @return string|null
-     * @throws \Exception
+     * @throws Exception
      */
     public function save($document)
     {
@@ -401,7 +403,7 @@ class QueryBuilder
         $resultObj = json_decode($result);
 
         if (isset($resultObj->code) && isset($resultObj->message)) {
-            throw new \Exception("$resultObj->code : $resultObj->message");
+            throw new Exception("$resultObj->code : $resultObj->message");
         }
 
         return $resultObj->_rid ?? null;
@@ -474,17 +476,17 @@ class QueryBuilder
      * @param string $type
      * @param string $id
      * @return QueryBuilder
-     * @throws \Exception
+     * @throws Exception
      */
     public function addTrigger(string $operation, string $type, string $id)
     {
-        $operation = \strtolower($operation);
-        if (!\in_array($operation, ["all", "create", "delete", "replace"]))
-            throw new \Exception("Trigger: Invalid operation \"{$operation}\"");
+        $operation = strtolower($operation);
+        if (!in_array($operation, ["all", "create", "delete", "replace"]))
+            throw new Exception("Trigger: Invalid operation \"{$operation}\"");
 
-        $type = \strtolower($type);
-        if (!\in_array($type, ["post", "pre"]))
-            throw new \Exception("Trigger: Invalid type \"{$type}\"");
+        $type = strtolower($type);
+        if (!in_array($type, ["post", "pre"]))
+            throw new Exception("Trigger: Invalid type \"{$type}\"");
 
         if (!isset($this->triggers[$operation][$type]))
             $this->triggers[$operation][$type] = [];
@@ -504,8 +506,8 @@ class QueryBuilder
         // Add headers for the current operation type at $operation (create|delete!replace)
         if (isset($this->triggers[$operation])) {
             foreach ($this->triggers[$operation] as $name => $ids) {
-                $ids = \is_array($ids) ? $ids : [$ids];
-                $headers["x-ms-documentdb-{$name}-trigger-include"] = \implode(",", $ids);
+                $ids = is_array($ids) ? $ids : [$ids];
+                $headers["x-ms-documentdb-{$name}-trigger-include"] = implode(",", $ids);
             }
         }
 
@@ -513,7 +515,7 @@ class QueryBuilder
         if (isset($this->triggers["all"])) {
             foreach ($this->triggers["all"] as $name => $ids) {
                 $headerKey = "x-ms-documentdb-{$name}-trigger-include";
-                $ids = \implode(",", \is_array($ids) ? $ids : [$ids]);
+                $ids = implode(",", is_array($ids) ? $ids : [$ids]);
                 $headers[$headerKey] = isset($headers[$headerKey]) ? $headers[$headerKey] .= "," . $ids : $headers[$headerKey] = $ids;
             }
         }
