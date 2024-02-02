@@ -4,7 +4,13 @@ PHP wrapper for Azure Cosmos DB
 
 ## Installation
 
-Include phuze/php-cosmos in your project, by adding it to your composer.json file.
+Install phuze/php-cosmos in your project:
+
+```bash
+composer require phuze/php-cosmos
+```
+
+Or adding it to your composer.json file:
 
 ```php
 {
@@ -18,8 +24,10 @@ Include phuze/php-cosmos in your project, by adding it to your composer.json fil
 
 ### v3.0.0
 - restore support for PHP 7.x -- this library can be used with both 7.x and 8.x
-- fixed an issue preventing document deletion from collections with nested partition keys
-- fixed an issue with partitionkeyrangeid headers, when a cross-partition query needs to be retried with PK ranges
+- improved how nested partition keys are handled
+- improved how partition values are matched
+- fixed an issue which prevented document deletion when a container used a nested partition key
+- fixed an issue with `partitionkeyrangeid` headers, when a cross-partition query needs to be retried with PK ranges
 
 ### v2.6.0
 - code refactor. min PHP verion supported is now 8.0
