@@ -90,7 +90,12 @@ $rid = \Phuze\PhpCosmos\QueryBuilderinstance()
 $rid = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('billing.country')
-    ->save(['id' => '2', 'name' => 'Jane doe', 'age' => 35, 'billing' => ['country' => 'Portugal']);
+    ->save([
+        'id' => '2',
+        'name' => 'Jane Doe',
+        'age' => 35,
+        'billing' => ['country' => 'Portugal']
+    ]);
 ```
 
 ### Updating Records
@@ -100,7 +105,13 @@ $rid = \Phuze\PhpCosmos\QueryBuilderinstance()
 $rid = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('country')
-    ->save(["_rid" => $rid, 'id' => '2', 'name' => 'Jane Doe Something', 'age' => 36, 'country' => 'Portugal']);
+    ->save([
+        '_rid'    => $rid, // existing document _rid
+        'id'      => '2',
+        'name'    => 'Jane Doe',
+        'age'     => 36,
+        'country' => 'Portugal'
+    ]);
 ```
 
 ### Querying Records
