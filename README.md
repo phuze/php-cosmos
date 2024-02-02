@@ -22,7 +22,7 @@ Or add it to your composer.json file:
 
 ## Changelog
 
-### v3.0.0
+### v3.0.2
 - restore support for PHP 7.x -- this library can be used with both 7.x and 8.x
 - improved how nested partition keys are handled
 - improved how partition values are matched
