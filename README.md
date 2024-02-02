@@ -60,9 +60,7 @@ Or adding it to your composer.json file:
 ### Connecting
 
 ```php
-use \Phuze\PhpCosmos\CosmosDb;
-
-$conn = new CosmosDb('host', 'key');
+$conn = new \Phuze\PhpCosmos\CosmosDb('host', 'key');
 $conn->setHttpClientOptions(['verify' => false]); # optional: set guzzle client options.
 $db = $conn->selectDB('databaseName');
 $collection = $db->selectCollection('collectionName');
@@ -71,7 +69,7 @@ $collection = $db->selectCollection('collectionName');
 # attempt to select the collection. however, if you have created
 # your database with shared throughput, then all collections require a partition key.
 # selectCollection() supports a second parameter for this purpose.
-$conn = new CosmosDb('host', 'key');
+$conn = new \Phuze\PhpCosmos\CosmosDb('host', 'key');
 $conn->setHttpClientOptions(['verify' => false]); # optional: set guzzle client options.
 $db = $conn->selectDB('dbName');
 $collection = $db->selectCollection('collectionName', 'myPartitionKey');
@@ -80,18 +78,16 @@ $collection = $db->selectCollection('collectionName', 'myPartitionKey');
 ### Inserting Records
 
 ```php
-use \Phuze\PhpCosmos\QueryBuilder;
-
 # consider a existing collection called "Users" with a partition key "country"
 
 # insert a record
-$rid = QueryBuilder::instance()
+$rid = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->save(['id' => '1', 'name' => 'John Doe', 'age' => 22, 'country' => 'Portugal']);
 
 # insert a record against a collection with a nested partition key
-$rid = QueryBuilder::instance()
+$rid = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('billing.country')
     ->save(['id' => '2', 'name' => 'Jane doe', 'age' => 35, 'billing' => ['country' => 'Portugal']);
@@ -101,7 +97,7 @@ $rid = QueryBuilder::instance()
 
 ```php
 # update a record
-$rid = QueryBuilder::instance()
+$rid = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->save(["_rid" => $rid, 'id' => '2', 'name' => 'Jane Doe Something', 'age' => 36, 'country' => 'Portugal']);
@@ -111,7 +107,7 @@ $rid = QueryBuilder::instance()
 
 ```php
 # query a document and return it as an array
-$res = QueryBuilder::instance()
+$res = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->select("c.id, c.name")
     ->where("c.age > @age and c.country = @country")
@@ -124,7 +120,7 @@ $res = QueryBuilder::instance()
 # partition value will result in a more efficient
 # query against your database as it will not rely
 # on cross-partition querying.
-$res = QueryBuilder::instance()
+$res = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->setPartitionValue('Portugal')
@@ -136,7 +132,7 @@ $res = QueryBuilder::instance()
 
 # query the top 5 documents as an array, with the
 # document ID as the array key.
-$res = QueryBuilder::instance()
+$res = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->select("c.id, c.username")
     ->where("c.age > @age and c.country = @country")
@@ -146,7 +142,7 @@ $res = QueryBuilder::instance()
     ->toArray('id');
 
 # query a document using a collection alias and cross partition query
-$res = QueryBuilder::instance()
+$res = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->select("HelloWorld.id, HelloWorld.name")
     ->from("HelloWorld")
@@ -159,14 +155,14 @@ $res = QueryBuilder::instance()
 
 ```php
 # delete one document that matches criteria (single partition)
-$res = QueryBuilder::instance()
+$res = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->where("c.age > 30 and c.country = 'Portugal'")
     ->delete();
 
 # delete all documents that match criteria (cross partition)
-$res = QueryBuilder::instance()
+$res = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->where("c.age > 20")
