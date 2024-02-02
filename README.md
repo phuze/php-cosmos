@@ -50,9 +50,10 @@ Or adding it to your composer.json file:
 ### v1.3.0
 - added support for parameterized queries
 
-## Note
+## Notes
 
-Based on [AzureDocumentDB-PHP](https://github.com/cocteau666/AzureDocumentDB-PHP) and [CosmosDb](https://github.com/jupitern/cosmosdb).
+- Based on [AzureDocumentDB-PHP](https://github.com/cocteau666/AzureDocumentDB-PHP) and [CosmosDb](https://github.com/jupitern/cosmosdb).
+- Planned updates include support for new `PATCH` api operations, also known as [partial document updates](https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update).
 
 ## Usage
 
