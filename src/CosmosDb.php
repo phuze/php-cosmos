@@ -1,30 +1,10 @@
 <?php
 
-namespace Jupitern\CosmosDb;
+namespace Phuze\PhpCosmos;
 
-/*
- * Based on the AzureDocumentDB-PHP library written by Takeshi Sakurai.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
- * Microsoft Azure Document DB Library for PHP
- * @link http://msdn.microsoft.com/en-us/library/azure/dn781481.aspx
- * @link https://github.com/jupitern/cosmosdb
- */
-
+use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\ClientException;
 use Psr\Http\Message\ResponseInterface;
 
 class CosmosDb
@@ -44,6 +24,7 @@ class CosmosDb
     {
         $this->host = $host;
         $this->private_key = $private_key;
+        $this->debug = false;
     }
 
     /**
@@ -107,7 +88,7 @@ class CosmosDb
      */
     private function request(string $path, string $method, array $headers, $body = NULL)
     {
-        $client = new \GuzzleHttp\Client();
+        $client = new Client();
 
         $options = [
             'headers' => $headers,
@@ -119,16 +100,16 @@ class CosmosDb
             (array)$this->httpClientOptions
         ));
 
-        /*
-        # blr07 debug
-        echo "=============== DEBUG (CosmosDb::request) ===============".PHP_EOL;
-        echo json_encode([
-            'method'        => $method,
-            'config'        => array_merge($options,(array)$this->httpClientOptions),
-            'requestUrl'    => "{$this->host}{$path}",
-            'response'      => json_encode($response->getBody()->getContents()),
-        ], JSON_PRETTY_PRINT).PHP_EOL;
-        */
+        # debug
+        if($this->debug) {
+            echo "=============== DEBUG (CosmosDb::request) ===============".PHP_EOL;
+            echo json_encode([
+                'method'        => $method,
+                'config'        => array_merge($options, (array)$this->httpClientOptions),
+                'requestUrl'    => "{$this->host}{$path}",
+                'response'      => json_encode($response->getBody()->getContents()),
+            ], JSON_PRETTY_PRINT).PHP_EOL;
+        }
 
         return $response->getBody()->getContents();
     }
@@ -222,16 +203,16 @@ class CosmosDb
                 $results[] = $result->getBody()->getContents();
             }
         }
-        catch (\GuzzleHttp\Exception\ClientException $e) {
+        catch (ClientException $e) {
             $responseError = \json_decode($e->getResponse()->getBody()->getContents());
 
-            /*
-            # blr07 debug
-            echo "=============== DEBUG (CosmosDb::query) ===============".PHP_EOL;
-            echo json_encode([
-                'responseError' => $responseError,
-            ], JSON_PRETTY_PRINT).PHP_EOL;
-            */
+            # debug
+            if($this->debug) {
+                echo "=============== DEBUG (CosmosDb::query) ===============".PHP_EOL;
+                echo json_encode([
+                    'responseError' => $responseError,
+                ], JSON_PRETTY_PRINT).PHP_EOL;
+            }
 
             // -- Retry the request with PK Ranges --
             // The provided cross partition query can not be directly served by the gateway.
@@ -257,16 +238,16 @@ class CosmosDb
                     $results[] = $result->getBody()->getContents();            
                 }
 
-                /*
-                # blr07 debug
-                echo "=============== DEBUG (CosmosDb::query) ===============".PHP_EOL;
-                echo json_encode([
-                    'headers' => $headers,
-                    'responseError' => $responseError,
-                    'getPkFullRange' => $this->getPkFullRange($rid_id, $rid_col),
-                    'results' => $results,
-                ], JSON_PRETTY_PRINT).PHP_EOL;
-                */
+                # debug
+                if($this->debug) {
+                    echo "=============== DEBUG (CosmosDb::query) ===============".PHP_EOL;
+                    echo json_encode([
+                        'headers' => $headers,
+                        'responseError' => $responseError,
+                        'getPkFullRange' => $this->getPkFullRange($rid_id, $rid_col),
+                        'results' => $results,
+                    ], JSON_PRETTY_PRINT).PHP_EOL;
+                }
 
             } else {
                 throw $e;
@@ -305,8 +286,8 @@ class CosmosDb
 	public function getPkFullRange($rid_id, $rid_col)
     {
 		$result = $this->getPkRanges($rid_id, $rid_col);
-		$ids = \array_column($result->PartitionKeyRanges, "id");
-		return $result->_rid . "," . \implode(",", $ids);
+		$ids = array_column($result->PartitionKeyRanges, "id");
+		return $result->_rid . "," . implode(",", $ids);
 	}
 
     /**
@@ -595,7 +576,7 @@ class CosmosDb
     public function createDocument(string $rid_id, string $rid_col, string $json, string $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('POST', 'docs', $rid_col);
-        $headers = \array_merge($headers, $authHeaders);
+        $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = strlen($json);
         if ($partitionKey !== null) {
             $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
@@ -621,7 +602,7 @@ class CosmosDb
     public function replaceDocument(string $rid_id, string $rid_col, string $rid_doc, string $json, string $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('PUT', 'docs', $rid_doc);
-        $headers = \array_merge($headers, $authHeaders);
+        $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = strlen($json);
         if ($partitionKey !== null) {
             $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
@@ -646,7 +627,7 @@ class CosmosDb
     public function deleteDocument(string $rid_id, string $rid_col, string $rid_doc, string $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('DELETE', 'docs', $rid_doc);
-        $headers = \array_merge($headers, $authHeaders);
+        $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = '0';
         if ($partitionKey !== null) {
             $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
