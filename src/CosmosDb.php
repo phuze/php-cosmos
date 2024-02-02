@@ -65,7 +65,7 @@ class CosmosDb
 
         return [
             'Accept' => 'application/json',
-            'User-Agent' => 'documentdb.php.sdk/1.0.0',
+            'User-Agent' => 'cosmos.php.sdk/3.0.2',
             'Cache-Control' => 'no-cache',
             'x-ms-date' => $x_ms_date,
             'x-ms-version' => $x_ms_version,
