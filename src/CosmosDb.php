@@ -2,10 +2,10 @@
 
 namespace Phuze\PhpCosmos;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Exception\ClientException;
-use Psr\Http\Message\ResponseInterface;
+use \GuzzleHttp\Client;
+use \GuzzleHttp\Exception\GuzzleException;
+use \GuzzleHttp\Exception\ClientException;
+use \Psr\Http\Message\ResponseInterface;
 
 class CosmosDb
 {
@@ -204,7 +204,7 @@ class CosmosDb
             }
         }
         catch (ClientException $e) {
-            $responseError = \json_decode($e->getResponse()->getBody()->getContents());
+            $responseError = json_decode($e->getResponse()->getBody()->getContents());
 
             # debug
             if($this->debug) {
