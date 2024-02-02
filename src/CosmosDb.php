@@ -634,7 +634,7 @@ class CosmosDb
         }
 
         /*
-        # blr07 debug
+        # debug
         echo "=============== DEBUG (CosmosDb::deleteDocument) ===============".PHP_EOL;
         echo json_encode([
             'method'        => "DELETE",

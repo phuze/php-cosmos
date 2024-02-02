@@ -368,7 +368,7 @@ class QueryBuilder
             }
 
             /*
-            # blr07 debug
+            # debug
             echo "=============== DEBUG (QueryBuilder::findPartitionValue) ===============".PHP_EOL;
             echo json_encode([
                 'isNested'          => $this->isNested($this->partitionKey),
@@ -426,7 +426,7 @@ class QueryBuilder
         if ($document) {
 
             /*
-            # blr07 debug
+            # debug
             echo "=============== DEBUG (QueryBuilder::delete) ===============".PHP_EOL;
             echo json_encode([
                 '$this->fields'         => $this->fields,
