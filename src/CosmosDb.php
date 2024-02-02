@@ -111,7 +111,7 @@ class CosmosDb
             ], JSON_PRETTY_PRINT).PHP_EOL;
         }
 
-        return $response->getBody()->getContents();
+        return $response;
     }
 
     /**
