@@ -52,8 +52,11 @@ Or add it to your composer.json file:
 
 ## Notes
 
+- Currently uses Microsoft API version `2018-12-31`
 - Based on [AzureDocumentDB-PHP](https://github.com/cocteau666/AzureDocumentDB-PHP) and [CosmosDb](https://github.com/jupitern/cosmosdb).
-- Planned updates include support for new [PATCH](https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update) api operations.
+- Planned updates include:
+    - support for new [PATCH](https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update) api operations
+    - enhanced debug and logging support
 
 ## Usage
 
