@@ -9,7 +9,7 @@
     "issues": "https://github.com/phuze/php-cosmos/issues"
   },
   "require"    :{
-    "php": ">=8.0",
+    "php": ">=7.0",
     "ext-curl": "*",
     "guzzlehttp/guzzle": ">=6.0"
   },
