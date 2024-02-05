@@ -4,9 +4,9 @@ namespace Phuze\PhpCosmos;
 
 class CosmosDbCollection
 {
-    private CosmosDb $document_db;
-    private string $rid_db;
-    private string $rid_col;
+    private $document_db;
+    private $rid_db;
+    private $rid_col;
 
     /**
      * __construct
