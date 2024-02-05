@@ -9,9 +9,9 @@ use \Psr\Http\Message\ResponseInterface;
 
 class CosmosDb
 {
-    private string $host;
-    private string $private_key;
-    public array $httpClientOptions;
+    private $host;
+    private $private_key;
+    public $httpClientOptions;
 
     /**
      * __construct
