@@ -12,6 +12,9 @@ composer require phuze/php-cosmos
 
 ## Changelog
 
+### v3.0.3
+- remove class property type declarations, which are only available from php >=7.4
+
 ### v3.0.2
 - restore support for PHP 7.x -- this library can be used with both 7.x and 8.x
 - improved how nested partition keys are handled
