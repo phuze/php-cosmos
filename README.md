@@ -10,16 +10,6 @@ Install phuze/php-cosmos in your project:
 composer require phuze/php-cosmos
 ```
 
-Or add it to your composer.json file:
-
-```php
-{
-    "require": {
-        "phuze/php-cosmos": "3.*"
-    }
-}
-```
-
 ## Changelog
 
 ### v3.0.2
