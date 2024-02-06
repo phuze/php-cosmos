@@ -12,7 +12,10 @@ composer require phuze/php-cosmos
 
 ## Changelog
 
-### v3.0.3
+### v3.0.4
+- bug fixes and other minor changes
+
+### v3.0.0
 - restore support for PHP 7.x -- this library can be used with both 7.x and 8.x
 - improved how nested partition keys are handled
 - improved how partition values are matched

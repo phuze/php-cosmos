@@ -392,9 +392,8 @@ class QueryBuilder
     public function save($document)
     {
         $document = (object)$document;
-
         $rid = is_object($document) && isset($document->_rid) ? $document->_rid : null;
-        $partitionValue = $this->partitionKey != null ? $this->findPartitionValue($document) : null;
+        $partitionValue = $this->findPartitionValue($document);
         $document = json_encode($document);
 
         $result = $rid ?
@@ -459,10 +458,14 @@ class QueryBuilder
         $select = ($this->fields != "")
             ? $this->fields
             : "c._rid" . ($this->partitionKey != null ? ", c." . $this->partitionKey : "");
+
         $response = [];
         foreach ((array)$this->select($select)->findAll($isCrossPartition)->toObject() as $document) {
-            $partitionValue = $this->partitionKey != null ? $this->findPartitionValue($document) : null;
-            $response[] = $this->collection->deleteDocument($document->_rid, $partitionValue, $this->triggersAsHeaders("delete"));
+            $response[] = $this->collection->deleteDocument(
+                $document->_rid,
+                $this->findPartitionValue($document),
+                $this->triggersAsHeaders("delete")
+            );
         }
 
         $this->response = $response;
