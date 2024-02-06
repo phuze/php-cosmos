@@ -77,13 +77,13 @@ $collection = $db->selectCollection('collectionName', 'myPartitionKey');
 # consider a existing collection called "Users" with a partition key "country"
 
 # insert a record
-$rid = \Phuze\PhpCosmos\QueryBuilderinstance()
+$rid = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->save(['id' => '1', 'name' => 'John Doe', 'age' => 22, 'country' => 'Portugal']);
 
 # insert a record against a collection with a nested partition key
-$rid = \Phuze\PhpCosmos\QueryBuilderinstance()
+$rid = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('billing.country')
     ->save([
@@ -98,7 +98,7 @@ $rid = \Phuze\PhpCosmos\QueryBuilderinstance()
 
 ```php
 # update a record
-$rid = \Phuze\PhpCosmos\QueryBuilderinstance()
+$rid = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->save([
@@ -114,7 +114,7 @@ $rid = \Phuze\PhpCosmos\QueryBuilderinstance()
 
 ```php
 # query a document and return it as an array
-$res = \Phuze\PhpCosmos\QueryBuilderinstance()
+$res = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->select("c.id, c.name")
     ->where("c.age > @age and c.country = @country")
@@ -127,7 +127,7 @@ $res = \Phuze\PhpCosmos\QueryBuilderinstance()
 # partition value will result in a more efficient
 # query against your database as it will not rely
 # on cross-partition querying.
-$res = \Phuze\PhpCosmos\QueryBuilderinstance()
+$res = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->setPartitionValue('Portugal')
@@ -139,7 +139,7 @@ $res = \Phuze\PhpCosmos\QueryBuilderinstance()
 
 # query the top 5 documents as an array, with the
 # document ID as the array key.
-$res = \Phuze\PhpCosmos\QueryBuilderinstance()
+$res = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->select("c.id, c.username")
     ->where("c.age > @age and c.country = @country")
@@ -149,7 +149,7 @@ $res = \Phuze\PhpCosmos\QueryBuilderinstance()
     ->toArray('id');
 
 # query a document using a collection alias and cross partition query
-$res = \Phuze\PhpCosmos\QueryBuilderinstance()
+$res = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->select("HelloWorld.id, HelloWorld.name")
     ->from("HelloWorld")
@@ -162,14 +162,14 @@ $res = \Phuze\PhpCosmos\QueryBuilderinstance()
 
 ```php
 # delete one document that matches criteria (single partition)
-$res = \Phuze\PhpCosmos\QueryBuilderinstance()
+$res = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->where("c.age > 30 and c.country = 'Portugal'")
     ->delete();
 
 # delete all documents that match criteria (cross partition)
-$res = \Phuze\PhpCosmos\QueryBuilderinstance()
+$res = \Phuze\PhpCosmos\QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->where("c.age > 20")
