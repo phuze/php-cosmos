@@ -193,7 +193,7 @@ class QueryBuilder
         $this->response = null;
         $this->multipleResults = true;
 
-        $partitionValue = $this->partitionValue != null ? $this->partitionValue : null;
+        $partitionValue = $this->partitionValue;
 
         $limit = $this->limit != null ? "top " . (int)$this->limit : "";
         $fields = !empty($this->fields) ? $this->fields : '*';
@@ -216,7 +216,7 @@ class QueryBuilder
         $this->response = null;
         $this->multipleResults = false;
 
-        $partitionValue = $this->partitionValue != null ? $this->partitionValue : null;
+        $partitionValue = $this->partitionValue;
 
         $fields = !empty($this->fields) ? $this->fields : '*';
         $where = $this->where != "" ? "where {$this->where}" : "";
@@ -318,7 +318,7 @@ class QueryBuilder
     {
         # if the user supplied a partition value using setPartitionValue(),
         # use it rather than trying to match one elsewhere
-        if(!empty($this->partitionValue)) {
+        if ($this->partitionValue !== null) {
             return $this->partitionValue;
         }
 

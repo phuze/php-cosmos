@@ -115,6 +115,18 @@ class CosmosDb
     }
 
     /**
+     * format a partition key value for the x-ms-documentdb-partitionkey header.
+     * json encoding keeps numbers and booleans typed, and escapes quotes in strings.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private function getPartitionKeyHeader($value)
+    {
+        return json_encode([$value]);
+    }
+
+    /**
      * selectDB
      *
      * @access public
@@ -164,6 +176,7 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $query Query
      * @param boolean $isCrossPartition used for cross partition query
+     * @param mixed $partitionValue partition key value, to query a single partition
      * @return array JSON response
      * @throws GuzzleException
      */
@@ -179,8 +192,8 @@ class CosmosDb
             $headers['x-ms-documentdb-query-enablecrosspartition'] = 'True';
         }
         
-        if ($partitionValue) {
-            $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionValue.'"]';
+        if ($partitionValue !== null) {
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
         }
         /*
          * Fix for https://github.com/jupitern/cosmosdb/issues/21 (credits to https://github.com/ElvenSpellmaker).
@@ -568,7 +581,7 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_col Resource Collection ID
      * @param string $json JSON request
-     * @param string|null $partitionKey
+     * @param mixed $partitionKey partition key value
      * @param array $headers Optional headers to send along with the request
      * @return string JSON response
      * @throws GuzzleException
@@ -579,7 +592,7 @@ class CosmosDb
         $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = strlen($json);
         if ($partitionKey !== null) {
-            $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
         }
 
         return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $json)->getBody()->getContents();
@@ -594,7 +607,7 @@ class CosmosDb
      * @param string $rid_col Resource Collection ID
      * @param string $rid_doc Resource Doc ID
      * @param string $json JSON request
-     * @param string|null $partitionKey
+     * @param mixed $partitionKey partition key value
      * @param array $headers Optional headers to send along with the request
      * @return string JSON response
      * @throws GuzzleException
@@ -605,7 +618,7 @@ class CosmosDb
         $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = strlen($json);
         if ($partitionKey !== null) {
-            $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
         }
 
         return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "PUT", $headers, $json)->getBody()->getContents();
@@ -619,7 +632,7 @@ class CosmosDb
      * @param string $rid_id Resource ID
      * @param string $rid_col Resource Collection ID
      * @param string $rid_doc Resource Doc ID
-     * @param string|null $partitionKey
+     * @param mixed $partitionKey partition key value
      * @param array $headers Optional headers to send along with the request
      * @return string JSON response
      * @throws GuzzleException
@@ -630,7 +643,7 @@ class CosmosDb
         $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = '0';
         if ($partitionKey !== null) {
-            $headers['x-ms-documentdb-partitionkey'] = '["'.$partitionKey.'"]';
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
         }
 
         /*
