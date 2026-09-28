@@ -14,6 +14,8 @@ class CosmosDb
     private $host;
     private $private_key;
     private $httpClient = null;
+    private $maxThrottleRetries = 0;
+    private $maxThrottleWaitMs = 0;
     public $httpClientOptions = [];
     public $debug = false;
 
@@ -42,6 +44,20 @@ class CosmosDb
 
         # rebuild the client on the next request so the new options apply
         $this->httpClient = null;
+    }
+
+    /**
+     * retry requests rejected with 429 (rate limited). off by default, so a 429
+     * is thrown to the caller. each retry waits for the time cosmos asks for in
+     * the x-ms-retry-after-ms header. the defaults match microsoft's own SDKs.
+     *
+     * @param int $maxRetries maximum retries per request. 0 disables retrying.
+     * @param int $maxWaitMs maximum total time to wait across retries of one request, in milliseconds.
+     */
+    public function setRetryOptions(int $maxRetries = 9, int $maxWaitMs = 30000)
+    {
+        $this->maxThrottleRetries = $maxRetries;
+        $this->maxThrottleWaitMs = $maxWaitMs;
     }
 
     /**
@@ -137,7 +153,8 @@ class CosmosDb
      * request
      *
      * a network error with no response, such as a pooled connection that went
-     * stale, is retried once.
+     * stale, is retried once. a 429 (rate limited) response is retried only if
+     * enabled with setRetryOptions().
      *
      * @access private
      * @param string $path request path
@@ -157,6 +174,8 @@ class CosmosDb
 
         $path = '/' . ltrim($path, '/');
         $networkRetried = !$retryNetworkErrors;
+        $throttleRetries = 0;
+        $throttleWaitMs = 0;
 
         while (true) {
             $error = null;
@@ -179,10 +198,19 @@ class CosmosDb
                 continue;
             }
 
-            if ($error !== null) {
-                throw $error;
+            # checked on the response rather than the exception, because
+            # with http_errors disabled a 429 is returned instead of thrown
+            $delayMs = $this->getThrottleDelay($response, $throttleRetries, $throttleWaitMs);
+            if ($delayMs === null) {
+                if ($error !== null) {
+                    throw $error;
+                }
+                break;
             }
-            break;
+
+            $throttleRetries++;
+            $throttleWaitMs += $delayMs;
+            usleep($delayMs * 1000);
         }
 
         # debug
@@ -197,6 +225,29 @@ class CosmosDb
         }
 
         return $response;
+    }
+
+    /**
+     * how long to wait before retrying a 429 (rate limited) response, using the
+     * x-ms-retry-after-ms header. null if it isn't a 429 or the retry limits are reached.
+     *
+     * @param ResponseInterface $response
+     * @param int $retries retries made so far
+     * @param int $waitedMs time waited so far, in milliseconds
+     * @return int|null milliseconds to wait
+     */
+    private function getThrottleDelay(ResponseInterface $response, int $retries, int $waitedMs)
+    {
+        if ($response->getStatusCode() !== 429 || $retries >= $this->maxThrottleRetries) {
+            return null;
+        }
+
+        $delayMs = (int)ceil((float)$response->getHeaderLine('x-ms-retry-after-ms'));
+        if ($delayMs <= 0) {
+            $delayMs = 1000;
+        }
+
+        return $waitedMs + $delayMs <= $this->maxThrottleWaitMs ? $delayMs : null;
     }
 
     /**
