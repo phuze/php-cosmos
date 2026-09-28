@@ -30,7 +30,7 @@ jobs:
             guzzle: '8'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -41,8 +41,9 @@ jobs:
       - name: Install dependencies
         run: |
           # guzzle 6 has open security advisories, so newer versions of composer
-          # refuse to install it. older versions don't have this setting.
-          composer config audit.block-insecure false || true
+          # refuse to install it. the older composer used on php 7.0 and 7.1
+          # doesn't block it, and doesn't have this setting, so hide that error.
+          composer config audit.block-insecure false 2>/dev/null || true
           composer require "guzzlehttp/guzzle:^${{ matrix.guzzle }}.0" --no-update --no-interaction
           composer update --prefer-dist --no-progress --no-interaction
 
