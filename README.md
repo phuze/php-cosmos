@@ -51,6 +51,7 @@ This release changes some existing behavior. See [Upgrading from v3](#upgrading-
 - Fixed `selectCollection()` when the partition key has no leading slash
 - Fixed debug mode emptying responses
 - Fixed deprecation warnings on newer versions of PHP and Guzzle
+- Fixed a warning on PHP 7.0 to 7.2 when a query returns no documents
 - Fixed support for PHP 7.0 and 7.1
 
 #### Upgrading from v3
@@ -108,6 +109,9 @@ Most apps only need to change `phuze/php-cosmos` to `^4.0` in `composer.json`. C
   ```
 
 - **Creating documents:** if the connection drops after Cosmos DB has saved a new document, the automatic retry fails with a 409 Conflict, so if you handle errors from `save()`, treat a 409 as "this document may already exist" rather than a plain failure
+
+### v3.0.6
+- Fixed a warning on PHP 7.2 when a query returns no documents
 
 ### v3.0.5
 - Fixed `whereContains()` missing its closing parenthesis
