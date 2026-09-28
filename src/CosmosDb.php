@@ -5,7 +5,6 @@ namespace Phuze\PhpCosmos;
 use \GuzzleHttp\Client;
 use \GuzzleHttp\Exception\GuzzleException;
 use \GuzzleHttp\Exception\ClientException;
-use \GuzzleHttp\Exception\RequestException;
 use \GuzzleHttp\Exception\TransferException;
 use \Psr\Http\Message\ResponseInterface;
 use \Psr\Log\LoggerInterface;
@@ -208,10 +207,10 @@ class CosmosDb
                 $response = $this->getHttpClient()->request($method, $path, $options);
             }
             catch (TransferException $e) {
-                # guzzle 6 and 7 both throw subclasses of TransferException, but
-                # only a RequestException can carry a response
+                # guzzle 6, 7 and 8 all throw subclasses of TransferException, but
+                # which of them can carry a response differs between versions
                 $error = $e;
-                $response = $e instanceof RequestException ? $e->getResponse() : null;
+                $response = method_exists($e, 'getResponse') ? $e->getResponse() : null;
             }
 
             $this->logRequest($method, $path, $start, $response, $error);
