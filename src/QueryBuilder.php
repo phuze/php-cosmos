@@ -293,6 +293,17 @@ class QueryBuilder
     }
 
     /**
+     * the partition key in dot form, for use in a query or to read it from a
+     * document; ie: "/form/type" becomes "form.type", and "/vendorName" becomes "vendorName"
+     *
+     * @return string
+     */
+    private function getPartitionKeyPath()
+    {
+        return str_replace('/', '.', trim($this->partitionKey, '/'));
+    }
+
+    /**
      * Find and set the partition value
      * 
      * @param object document
@@ -386,7 +397,7 @@ class QueryBuilder
         # otherwise, assume the key is in the root of the
         # document and return the value of the property key
         else {
-            return $document->{$this->partitionKey};
+            return $document->{$this->getPartitionKeyPath()};
         }
     }
 
@@ -424,7 +435,7 @@ class QueryBuilder
 
         $select = $this->fields != ""
             ? $this->fields
-            : "c._rid" . ($this->partitionKey != null ? ", c." . $this->partitionKey : "");
+            : "c._rid" . ($this->partitionKey != null ? ", c." . $this->getPartitionKeyPath() : "");
 
         $document = $this->select($select)->find($isCrossPartition)->toObject();
 
@@ -463,7 +474,7 @@ class QueryBuilder
 
         $select = ($this->fields != "")
             ? $this->fields
-            : "c._rid" . ($this->partitionKey != null ? ", c." . $this->partitionKey : "");
+            : "c._rid" . ($this->partitionKey != null ? ", c." . $this->getPartitionKeyPath() : "");
 
         $response = [];
         foreach ((array)$this->select($select)->findAll($isCrossPartition)->toObject() as $document) {
