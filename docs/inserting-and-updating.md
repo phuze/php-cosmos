@@ -1,6 +1,6 @@
 # Inserting and Updating
 
-These examples use the `$db` and `$collection` from [Connecting](connecting.md).
+These examples use the `$database` and `$collection` from [Connecting](connecting.md).
 
 `setPartitionKey()` tells `save()` and `delete()` which property holds the partition key, so they can read its value from the document. Queries and patches use `setPartitionValue()` instead.
 
@@ -18,7 +18,7 @@ $rid = QueryBuilder::instance()
 
 # Insert a document into a collection with a nested partition key.
 # The key can be written as 'billing.country' or '/billing/country'.
-$customers = $db->selectCollection('Customers', '/billing/country');
+$customers = $database->selectCollection('Customers', '/billing/country');
 
 $customerRid = QueryBuilder::instance()
     ->setCollection($customers)

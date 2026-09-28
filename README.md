@@ -34,8 +34,9 @@ use Phuze\PhpCosmos\CosmosDb;
 use Phuze\PhpCosmos\QueryBuilder;
 
 # connect, and select a database and collection
-$conn = new CosmosDb('https://myaccount.documents.azure.com:443/', 'your-key');
-$collection = $conn->selectDB('databaseName')->selectCollection('Users', '/country');
+$conn = new CosmosDb('https://myaccount.documents.azure.com', 'your-key');
+$database = $conn->selectDB('databaseName');
+$collection = $database->selectCollection('Users', '/country');
 
 # find the users in Canada who are over 30
 $users = QueryBuilder::instance()
