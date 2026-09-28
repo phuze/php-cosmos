@@ -112,7 +112,7 @@ class QueryBuilder
      */
     public function whereContains(string $field, $value)
     {
-		return $this->where("CONTAINS($field, '{$value}'");
+		return $this->where("CONTAINS($field, '{$value}')");
 	}
 
     /**
