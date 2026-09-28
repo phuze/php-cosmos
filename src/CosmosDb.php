@@ -5,6 +5,8 @@ namespace Phuze\PhpCosmos;
 use \GuzzleHttp\Client;
 use \GuzzleHttp\Exception\GuzzleException;
 use \GuzzleHttp\Exception\ClientException;
+use \GuzzleHttp\Exception\RequestException;
+use \GuzzleHttp\Exception\TransferException;
 use \Psr\Http\Message\ResponseInterface;
 
 class CosmosDb
@@ -134,15 +136,19 @@ class CosmosDb
     /**
      * request
      *
+     * a network error with no response, such as a pooled connection that went
+     * stale, is retried once.
+     *
      * @access private
      * @param string $path request path
      * @param string $method request method
      * @param array $headers request headers
      * @param string|null $body request body (JSON or QUERY)
+     * @param bool $retryNetworkErrors false for requests that aren't safe to send twice
      * @return ResponseInterface JSON response
      * @throws GuzzleException
      */
-    private function request(string $path, string $method, array $headers, $body = null)
+    private function request(string $path, string $method, array $headers, $body = null, bool $retryNetworkErrors = true)
     {
         $options = [
             'headers' => $headers,
@@ -150,8 +156,34 @@ class CosmosDb
         ];
 
         $path = '/' . ltrim($path, '/');
+        $networkRetried = !$retryNetworkErrors;
 
-        $response = $this->getHttpClient()->request($method, $path, $options);
+        while (true) {
+            $error = null;
+
+            try {
+                $response = $this->getHttpClient()->request($method, $path, $options);
+            }
+            catch (TransferException $e) {
+                # guzzle 6 and 7 both throw subclasses of TransferException, but
+                # only a RequestException can carry a response
+                $error = $e;
+                $response = $e instanceof RequestException ? $e->getResponse() : null;
+            }
+
+            if ($response === null) {
+                if ($networkRetried) {
+                    throw $error;
+                }
+                $networkRetried = true;
+                continue;
+            }
+
+            if ($error !== null) {
+                throw $error;
+            }
+            break;
+        }
 
         # debug
         if($this->debug) {
@@ -988,6 +1020,9 @@ class CosmosDb
     /**
      * executeStoredProcedure
      *
+     * not retried on a network error, because a stored procedure
+     * isn't necessarily safe to run twice
+     *
      * @link http://
      * @access public
      * @param string $rid_id Resource ID
@@ -1001,7 +1036,7 @@ class CosmosDb
     {
         $headers = $this->getAuthHeaders('POST', 'sprocs', $rid_sproc);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "POST", $headers, $json, false)->getBody()->getContents();
     }
 
     /**
