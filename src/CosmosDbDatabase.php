@@ -18,6 +18,7 @@ class CosmosDbDatabase
      *
      * @access public
      * @param string $col_name Collection name
+     * @param string|null $partitionKey partition key path used if the collection is created; ie: "/country" or "billing.country"
      */
     public function selectCollection($col_name, $partitionKey = null)
     {
@@ -30,8 +31,14 @@ class CosmosDbDatabase
             }
         }
         if (!$rid_col) {
-            $col_body["id"] = $col_name;
+            $col_body = ["id" => $col_name];
             if ($partitionKey) {
+                # cosmos requires a path starting with a slash, so a key without
+                # one (ie: "country" or "billing.country") was always rejected.
+                # convert it to path form; ie: "/country" or "/billing/country"
+                if (strpos($partitionKey, '/') !== 0) {
+                    $partitionKey = '/' . str_replace('.', '/', $partitionKey);
+                }
                 $col_body["partitionKey"] = [
                     "paths" => [$partitionKey],
                     "kind" => "Hash"
