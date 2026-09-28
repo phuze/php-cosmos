@@ -182,6 +182,14 @@ class CosmosDb
      */
     private function request(string $path, string $method, array $headers, $body = null, bool $retryNetworkErrors = true)
     {
+        # guzzle 7.11+ deprecates numeric header values (ie: Content-Length from strlen()),
+        # and guzzle 8 rejects them
+        foreach ($headers as $name => $value) {
+            if (is_int($value) || is_float($value)) {
+                $headers[$name] = (string)$value;
+            }
+        }
+
         $options = [
             'headers' => $headers,
             'body' => $body,
