@@ -8,12 +8,14 @@ use \GuzzleHttp\Exception\ClientException;
 use \GuzzleHttp\Exception\RequestException;
 use \GuzzleHttp\Exception\TransferException;
 use \Psr\Http\Message\ResponseInterface;
+use \Psr\Log\LoggerInterface;
 
 class CosmosDb
 {
     private $host;
     private $private_key;
     private $httpClient = null;
+    private $logger = null;
     private $maxThrottleRetries = 0;
     private $maxThrottleWaitMs = 0;
     public $httpClientOptions = [];
@@ -58,6 +60,18 @@ class CosmosDb
     {
         $this->maxThrottleRetries = $maxRetries;
         $this->maxThrottleWaitMs = $maxWaitMs;
+    }
+
+    /**
+     * set a PSR-3 logger. every request is logged at debug level with its
+     * status, duration, request charge and activity id. retries are logged
+     * at warning level.
+     *
+     * @param LoggerInterface $logger
+     */
+    public function setLogger(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
     }
 
     /**
@@ -178,6 +192,7 @@ class CosmosDb
         $throttleWaitMs = 0;
 
         while (true) {
+            $start = microtime(true);
             $error = null;
 
             try {
@@ -190,11 +205,18 @@ class CosmosDb
                 $response = $e instanceof RequestException ? $e->getResponse() : null;
             }
 
+            $this->logRequest($method, $path, $start, $response, $error);
+
             if ($response === null) {
                 if ($networkRetried) {
                     throw $error;
                 }
                 $networkRetried = true;
+                $this->log('warning', 'Cosmos DB connection error, retrying', [
+                    'method' => $method,
+                    'path'   => $path,
+                    'error'  => $error->getMessage(),
+                ]);
                 continue;
             }
 
@@ -210,6 +232,12 @@ class CosmosDb
 
             $throttleRetries++;
             $throttleWaitMs += $delayMs;
+            $this->log('warning', 'Cosmos DB request rate limited (429), retrying', [
+                'method'         => $method,
+                'path'           => $path,
+                'retry_after_ms' => $delayMs,
+                'attempt'        => $throttleRetries,
+            ]);
             usleep($delayMs * 1000);
         }
 
@@ -264,6 +292,50 @@ class CosmosDb
             $body->rewind();
         }
         return $contents;
+    }
+
+    /**
+     * log one request attempt at debug level
+     *
+     * @param string $method
+     * @param string $path
+     * @param float $start microtime the attempt started
+     * @param ResponseInterface|null $response
+     * @param \Exception|null $error
+     */
+    private function logRequest(string $method, string $path, float $start, $response, $error)
+    {
+        if ($this->logger === null) {
+            return;
+        }
+
+        $context = [
+            'method'      => $method,
+            'path'        => $path,
+            'status'      => $response ? $response->getStatusCode() : null,
+            'duration_ms' => (int)round((microtime(true) - $start) * 1000),
+        ];
+        if ($response) {
+            $context['request_charge'] = (float)$response->getHeaderLine('x-ms-request-charge');
+            $context['activity_id'] = $response->getHeaderLine('x-ms-activity-id');
+        }
+        if ($error) {
+            $context['error'] = $error->getMessage();
+        }
+
+        $this->log('debug', "Cosmos DB {$method} {$path}", $context);
+    }
+
+    /**
+     * @param string $level PSR-3 log level
+     * @param string $message
+     * @param array $context
+     */
+    private function log(string $level, string $message, array $context = [])
+    {
+        if ($this->logger !== null) {
+            $this->logger->log($level, $message, $context);
+        }
     }
 
     /**
@@ -347,6 +419,13 @@ class CosmosDb
         if ($partitionValue !== null) {
             $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
         }
+
+        $this->log('debug', 'Cosmos DB query', [
+            'query'           => $query,
+            'cross_partition' => $isCrossPartition,
+            'partition_value' => $partitionValue,
+        ]);
+
         /*
          * Fix for https://github.com/jupitern/cosmosdb/issues/21 (credits to https://github.com/ElvenSpellmaker).
          *
@@ -386,6 +465,8 @@ class CosmosDb
             // exception (which only happens on older SDK clients), then you can safely ignore this message.
             if ($isCrossPartition && $responseError->code === "BadRequest" && strpos($responseError->message, "cross partition query can not be directly served by the gateway") !== false)
             {
+                $this->log('info', 'Cosmos DB cross partition query not served by the gateway, querying each partition key range');
+
                 $fullRange = $this->getPkFullRange($rid_id, $rid_col);
 
                 // explode range ids into array.
