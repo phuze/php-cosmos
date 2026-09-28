@@ -16,6 +16,7 @@ class CosmosDb
     private $private_key;
     private $httpClient = null;
     private $logger = null;
+    private $pkRanges = [];
     private $maxThrottleRetries = 0;
     private $maxThrottleWaitMs = 0;
     public $httpClientOptions = [];
@@ -295,6 +296,17 @@ class CosmosDb
     }
 
     /**
+     * decode the error body of a 4xx response
+     *
+     * @param ClientException $e
+     * @return object|null
+     */
+    private function decodeError(ClientException $e)
+    {
+        return json_decode($this->readBody($e->getResponse()));
+    }
+
+    /**
      * log one request attempt at debug level
      *
      * @param string $method
@@ -404,18 +416,18 @@ class CosmosDb
      * @return array JSON response
      * @throws GuzzleException
      */
-	public function query(string $rid_id, string $rid_col, string $query, bool $isCrossPartition = false, $partitionValue = null)
-	{
+    public function query(string $rid_id, string $rid_col, string $query, bool $isCrossPartition = false, $partitionValue = null)
+    {
         $headers = $this->getAuthHeaders('POST', 'docs', $rid_col);
         $headers['Content-Length'] = strlen($query);
         $headers['Content-Type'] = 'application/query+json';
         $headers['x-ms-max-item-count'] = -1;
         $headers['x-ms-documentdb-isquery'] = 'True';
-        
+
         if ($isCrossPartition) {
             $headers['x-ms-documentdb-query-enablecrosspartition'] = 'True';
         }
-        
+
         if ($partitionValue !== null) {
             $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
         }
@@ -426,29 +438,11 @@ class CosmosDb
             'partition_value' => $partitionValue,
         ]);
 
-        /*
-         * Fix for https://github.com/jupitern/cosmosdb/issues/21 (credits to https://github.com/ElvenSpellmaker).
-         *
-         * CosmosDB has a max packet size of 4MB and will automatically paginate after that, regardless of x-ms-max-items.
-         * If this is the case, a 'x-ms-continuation'-header will be present in the response headers. The value of this
-         * header will be a continuation token. If this header is detected, we can rerun our query with an additional
-         * 'x-ms-continuation' request header, with the continuation token we received earlier as its value.
-         *
-         * This fix checks if this header is present on the response headers and handles the additional requests, untill
-         * all results are loaded.
-         */
-        $results = [];
         try {
-            $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
-            $results[] = $result->getBody()->getContents();
-            while ($result->getHeader('x-ms-continuation') !== []) {
-                $headers['x-ms-continuation'] = $result->getHeader('x-ms-continuation');
-                $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
-                $results[] = $result->getBody()->getContents();
-            }
+            return $this->getQueryResults($rid_id, $rid_col, $query, $headers);
         }
         catch (ClientException $e) {
-            $responseError = json_decode($e->getResponse()->getBody()->getContents());
+            $responseError = $this->decodeError($e);
 
             # debug
             if($this->debug) {
@@ -463,42 +457,90 @@ class CosmosDb
             // This is a first chance (internal) exception that all newer clients will know how to
             // handle gracefully. This exception is traced, but unless you see it bubble up as an
             // exception (which only happens on older SDK clients), then you can safely ignore this message.
-            if ($isCrossPartition && $responseError->code === "BadRequest" && strpos($responseError->message, "cross partition query can not be directly served by the gateway") !== false)
-            {
-                $this->log('info', 'Cosmos DB cross partition query not served by the gateway, querying each partition key range');
+            $notServedByGateway = $isCrossPartition
+                && isset($responseError->code, $responseError->message)
+                && $responseError->code === "BadRequest"
+                && strpos($responseError->message, "cross partition query can not be directly served by the gateway") !== false;
 
-                $fullRange = $this->getPkFullRange($rid_id, $rid_col);
-
-                // explode range ids into array.
-                // remove first element if its an id; ie: "z6odAJjXSto="
-                $rangeIds = explode(",", $fullRange);
-                if(!is_numeric($rangeIds[0])) {
-                    array_shift($rangeIds);
-                }
-
-                // iterate through each range id and fetch results
-                $results = [];
-                foreach($rangeIds as $id) {
-                    $headers["x-ms-documentdb-partitionkeyrangeid"] = $id;
-                    $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
-                    $results[] = $result->getBody()->getContents();            
-                }
-
-                # debug
-                if($this->debug) {
-                    echo "=============== DEBUG (CosmosDb::query) ===============".PHP_EOL;
-                    echo json_encode([
-                        'headers' => $headers,
-                        'responseError' => $responseError,
-                        'getPkFullRange' => $this->getPkFullRange($rid_id, $rid_col),
-                        'results' => $results,
-                    ], JSON_PRETTY_PRINT).PHP_EOL;
-                }
-
-            } else {
+            if (!$notServedByGateway) {
                 throw $e;
             }
         }
+
+        $this->log('info', 'Cosmos DB cross partition query not served by the gateway, querying each partition key range');
+
+        return $this->queryEachPkRange($rid_id, $rid_col, $query, $headers);
+    }
+
+    /**
+     * run a query against each partition key range in turn. the results of each
+     * range are separate, so an ORDER BY or TOP applies within each range only.
+     *
+     * @param string $rid_id Resource ID
+     * @param string $rid_col Resource Collection ID
+     * @param string $query Query
+     * @param array $headers request headers
+     * @return array JSON response
+     * @throws GuzzleException
+     */
+    private function queryEachPkRange(string $rid_id, string $rid_col, string $query, array $headers)
+    {
+        $refreshed = false;
+
+        while (true) {
+            try {
+                $results = [];
+                foreach ($this->getPkRanges($rid_id, $rid_col)->PartitionKeyRanges as $range) {
+                    $headers['x-ms-documentdb-partitionkeyrangeid'] = $range->id;
+                    $results = array_merge($results, $this->getQueryResults($rid_id, $rid_col, $query, $headers));
+                }
+                return $results;
+            }
+            catch (ClientException $e) {
+                // the partition key ranges are cached, and go stale when cosmos splits a partition.
+                // querying a range that no longer exists returns 410 Gone, so refresh them and start over once.
+                if ($refreshed || $e->getResponse()->getStatusCode() !== 410) {
+                    throw $e;
+                }
+                $refreshed = true;
+                unset($this->pkRanges[$rid_id][$rid_col]);
+                $this->log('info', 'Cosmos DB partition key ranges changed, refreshing');
+            }
+        }
+    }
+
+    /**
+     * getQueryResults
+     *
+     * run a query and return every page of results
+     *
+     * @param string $rid_id Resource ID
+     * @param string $rid_col Resource Collection ID
+     * @param string $query Query
+     * @param array $headers request headers
+     * @return array JSON response for each page
+     * @throws GuzzleException
+     */
+    private function getQueryResults(string $rid_id, string $rid_col, string $query, array $headers)
+    {
+        /*
+         * Fix for https://github.com/jupitern/cosmosdb/issues/21 (credits to https://github.com/ElvenSpellmaker).
+         *
+         * CosmosDB has a max packet size of 4MB and will automatically paginate after that, regardless of x-ms-max-items.
+         * If this is the case, a 'x-ms-continuation'-header will be present in the response headers. The value of this
+         * header will be a continuation token. If this header is detected, we can rerun our query with an additional
+         * 'x-ms-continuation' request header, with the continuation token we received earlier as its value.
+         *
+         * This fix checks if this header is present on the response headers and handles the additional requests, untill
+         * all results are loaded.
+         */
+        $results = [];
+        do {
+            $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
+            $results[] = $result->getBody()->getContents();
+            $continuation = $result->getHeaderLine('x-ms-continuation');
+            $headers['x-ms-continuation'] = $continuation;
+        } while ($continuation !== '');
 
         return $results;
     }
@@ -506,19 +548,25 @@ class CosmosDb
     /**
      * getPkRanges
      *
+     * the ranges are cached for the life of this object
+     *
      * @param string $rid_id
      * @param string $rid_col
      * @return mixed
      * @throws GuzzleException
      */
-	public function getPkRanges(string $rid_id, string $rid_col)
+    public function getPkRanges(string $rid_id, string $rid_col)
     {
-		$headers = $this->getAuthHeaders('GET', 'pkranges', $rid_col);
-		$headers['Accept'] = 'application/json';
-		$headers['x-ms-max-item-count'] = -1;
-		$result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/pkranges", "GET", $headers);
-		return json_decode($result->getBody()->getContents());
-	}
+        if (!isset($this->pkRanges[$rid_id][$rid_col])) {
+            $headers = $this->getAuthHeaders('GET', 'pkranges', $rid_col);
+            $headers['Accept'] = 'application/json';
+            $headers['x-ms-max-item-count'] = -1;
+            $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/pkranges", "GET", $headers);
+            $this->pkRanges[$rid_id][$rid_col] = json_decode($result->getBody()->getContents());
+        }
+
+        return $this->pkRanges[$rid_id][$rid_col];
+    }
 
     /**
      * getPkFullRange
