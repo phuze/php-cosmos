@@ -27,6 +27,36 @@ composer require phuze/php-cosmos:^3.0
 | 7.2.5 to 7.3 | 6 or 7 |
 | 7.4 and later, including 8.x | 6, 7 or 8 |
 
+## Usage
+
+```php
+use Phuze\PhpCosmos\CosmosDb;
+use Phuze\PhpCosmos\QueryBuilder;
+
+# connect, and select a database and collection
+$conn = new CosmosDb('https://myaccount.documents.azure.com:443/', 'your-key');
+$collection = $conn->selectDB('databaseName')->selectCollection('Users', '/country');
+
+# find the users in Canada who are over 30
+$users = QueryBuilder::instance()
+    ->setCollection($collection)
+    ->setPartitionValue('Canada')
+    ->where("c.age > @age")
+    ->params(['@age' => 30])
+    ->findAll()
+    ->toArray();
+```
+
+See the [documentation](docs/README.md) for more examples:
+
+- [Connecting](docs/connecting.md)
+- [Inserting and Updating](docs/inserting-and-updating.md)
+- [Querying](docs/querying.md)
+- [Patching](docs/patching.md)
+- [Deleting](docs/deleting.md)
+- [Rate Limiting (429)](docs/rate-limiting.md)
+- [Logging and Debugging](docs/logging.md)
+
 ## Changelog
 
 ### v4.0.0
@@ -146,18 +176,6 @@ Most apps only need to change `phuze/php-cosmos` to `^4.0` in `composer.json`. C
 - Based on [AzureDocumentDB-PHP](https://github.com/cocteau666/AzureDocumentDB-PHP) and [CosmosDb](https://github.com/jupitern/cosmosdb)
 - The jupitern/cosmosdb library removed PHP 7 support as of v2.6.0, but I still have legacy systems that run on PHP 7.x, so rather than ask jupitern to take on older PHP versions again, it made more sense to maintain my own library that supports them
 - Some [cross-partition queries](docs/querying.md#cross-partition-queries) (e.g. those with `ORDER BY`, `TOP` or aggregates) can't be served by the Cosmos DB gateway, so they're run against each partition key range in turn, and `ORDER BY` and `TOP` apply within each range rather than across the whole result
-
-## Usage
-
-See the [documentation](docs/README.md) for examples:
-
-- [Connecting](docs/connecting.md)
-- [Inserting and Updating](docs/inserting-and-updating.md)
-- [Querying](docs/querying.md)
-- [Patching](docs/patching.md)
-- [Deleting](docs/deleting.md)
-- [Rate Limiting (429)](docs/rate-limiting.md)
-- [Logging and Debugging](docs/logging.md)
 
 ## Development
 
