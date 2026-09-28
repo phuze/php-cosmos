@@ -721,7 +721,9 @@ class QueryBuilder
         foreach ((array)$this->response as $response) {
             $res = json_decode($response);
             if (isset($res->Documents)) {
-                array_push($results, ...$res->Documents);
+                # array_merge rather than array_push(...), which needs at least
+                # one document on php before 7.3
+                $results = array_merge($results, $res->Documents);
             } else {
                 $results[] = $res;
             }
