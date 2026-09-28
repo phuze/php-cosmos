@@ -4,10 +4,10 @@ PHP wrapper for Azure Cosmos DB
 
 ## Installation
 
-Install phuze/php-cosmos in your project:
+Install the 3.x version of phuze/php-cosmos in your project:
 
 ```bash
-composer require phuze/php-cosmos
+composer require phuze/php-cosmos:^3.0
 ```
 
 ## Changelog
