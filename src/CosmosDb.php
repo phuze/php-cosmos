@@ -960,17 +960,6 @@ class CosmosDb
             $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
         }
 
-        /*
-        # debug
-        echo "=============== DEBUG (CosmosDb::deleteDocument) ===============".PHP_EOL;
-        echo json_encode([
-            'method'        => "DELETE",
-            'path'          => "/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}",
-            '$authHeaders'  => $authHeaders,
-            '$headers'      => $headers,
-        ], JSON_PRETTY_PRINT).PHP_EOL;
-        */
-
         return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "DELETE", $headers)->getBody()->getContents();
     }
 

@@ -6,7 +6,7 @@ use \Exception;
 
 class QueryBuilder
 {
-    private $collection = "";
+    private $collection = null;
     private $partitionKey = null;
     private $partitionValue = null;
     private $queryString = "";
