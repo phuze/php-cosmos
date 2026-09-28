@@ -48,3 +48,13 @@ jobs:
 
       - name: Run tests
         run: composer test
+
+  # one check that only passes when every test job above passes, so branch
+  # protection can require this instead of each php and guzzle combination
+  all-tests-passed:
+    name: All tests passed
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.test.result }}" = "success"
