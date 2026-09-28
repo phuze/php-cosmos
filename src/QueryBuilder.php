@@ -307,6 +307,12 @@ class QueryBuilder
             return $this->partitionValue;
         }
 
+        # without a partition key there's nothing to look up. this is
+        # the case for collections that aren't partitioned.
+        if (empty($this->partitionKey)) {
+            return null;
+        }
+
         # if the partition key contains slashes or dots, the user
         # is referencing a nested value, so we should find it
         if ($this->isNested($this->partitionKey)) {
