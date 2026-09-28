@@ -11,6 +11,8 @@ use \Psr\Log\LoggerInterface;
 
 class CosmosDb
 {
+    const VERSION = '4.0.0';
+
     private $host;
     private $private_key;
     private $httpClient = null;
@@ -155,7 +157,7 @@ class CosmosDb
 
         return [
             'Accept' => 'application/json',
-            'User-Agent' => 'cosmos.php.sdk/3.0.2',
+            'User-Agent' => 'cosmos.php.sdk/' . self::VERSION,
             'Cache-Control' => 'no-cache',
             'x-ms-date' => $x_ms_date,
             'x-ms-version' => $x_ms_version,
