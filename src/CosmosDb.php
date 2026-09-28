@@ -11,7 +11,8 @@ class CosmosDb
 {
     private $host;
     private $private_key;
-    public $httpClientOptions;
+    private $httpClient = null;
+    public $httpClientOptions = [];
     public $debug = false;
 
     /**
@@ -29,12 +30,69 @@ class CosmosDb
 
     /**
      * set guzzle http client options using an associative array.
+     * these are merged over the defaults (60s timeout, 5s connect timeout).
      *
      * @param array $options
      */
     public function setHttpClientOptions(array $options = [])
     {
         $this->httpClientOptions = $options;
+
+        # rebuild the client on the next request so the new options apply
+        $this->httpClient = null;
+    }
+
+    /**
+     * the guzzle client is created once and reused, so requests share
+     * pooled connections instead of opening a new one each time.
+     *
+     * @return Client
+     */
+    private function getHttpClient()
+    {
+        if ($this->httpClient === null) {
+            $defaults = [
+                'base_uri'        => rtrim($this->host, '/'),
+                'http_errors'     => true,
+                'timeout'         => 60.0,
+                'connect_timeout' => 5.0,
+                'curl'            => $this->getKeepAliveCurlOptions(),
+            ];
+
+            $options = (array)$this->httpClientOptions;
+
+            # merge curl options individually, so setting one doesn't drop the keep-alive defaults
+            if (isset($options['curl']) && is_array($options['curl'])) {
+                $options['curl'] = $options['curl'] + $defaults['curl'];
+            }
+
+            $this->httpClient = new Client(array_merge($defaults, $options));
+        }
+
+        return $this->httpClient;
+    }
+
+    /**
+     * azure drops connections that sit idle for about 4 minutes. tcp keep-alive
+     * probes stop a pooled connection from going stale between requests.
+     *
+     * @return array
+     */
+    private function getKeepAliveCurlOptions()
+    {
+        $options = [];
+
+        if (defined('CURLOPT_TCP_KEEPALIVE')) {
+            $options[CURLOPT_TCP_KEEPALIVE] = 1;
+            if (defined('CURLOPT_TCP_KEEPIDLE')) {
+                $options[CURLOPT_TCP_KEEPIDLE] = 60;
+            }
+            if (defined('CURLOPT_TCP_KEEPINTVL')) {
+                $options[CURLOPT_TCP_KEEPINTVL] = 30;
+            }
+        }
+
+        return $options;
     }
 
     /**
@@ -76,29 +134,24 @@ class CosmosDb
     /**
      * request
      *
-     * use cURL functions
-     *
      * @access private
      * @param string $path request path
      * @param string $method request method
      * @param array $headers request headers
-     * @param string $body request body (JSON or QUERY)
+     * @param string|null $body request body (JSON or QUERY)
      * @return ResponseInterface JSON response
      * @throws GuzzleException
      */
-    private function request(string $path, string $method, array $headers, $body = NULL)
+    private function request(string $path, string $method, array $headers, $body = null)
     {
-        $client = new Client();
-
         $options = [
             'headers' => $headers,
             'body' => $body,
         ];
 
-        $response = $client->request($method, $this->host . $path, array_merge(
-            $options,
-            (array)$this->httpClientOptions
-        ));
+        $path = '/' . ltrim($path, '/');
+
+        $response = $this->getHttpClient()->request($method, $path, $options);
 
         # debug
         if($this->debug) {
@@ -106,7 +159,7 @@ class CosmosDb
             echo json_encode([
                 'method'        => $method,
                 'config'        => array_merge($options, (array)$this->httpClientOptions),
-                'requestUrl'    => "{$this->host}{$path}",
+                'requestUrl'    => rtrim($this->host, '/') . $path,
                 'response'      => json_encode($response->getBody()->getContents()),
             ], JSON_PRETTY_PRINT).PHP_EOL;
         }
@@ -566,10 +619,6 @@ class CosmosDb
     {
         $headers = $this->getAuthHeaders('GET', 'docs', $rid_doc);
         $headers['Content-Length'] = '0';
-        $options = array(
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_HTTPGET => true,
-        );
         return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "GET", $headers)->getBody()->getContents();
     }
 
