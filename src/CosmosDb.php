@@ -220,7 +220,7 @@ class CosmosDb
                 'method'        => $method,
                 'config'        => array_merge($options, (array)$this->httpClientOptions),
                 'requestUrl'    => rtrim($this->host, '/') . $path,
-                'response'      => json_encode($response->getBody()->getContents()),
+                'response'      => $this->readBody($response),
             ], JSON_PRETTY_PRINT).PHP_EOL;
         }
 
@@ -248,6 +248,22 @@ class CosmosDb
         }
 
         return $waitedMs + $delayMs <= $this->maxThrottleWaitMs ? $delayMs : null;
+    }
+
+    /**
+     * read a response body without consuming it, so it can still be read afterwards
+     *
+     * @param ResponseInterface $response
+     * @return string
+     */
+    private function readBody(ResponseInterface $response)
+    {
+        $body = $response->getBody();
+        $contents = (string)$body;
+        if ($body->isSeekable()) {
+            $body->rewind();
+        }
+        return $contents;
     }
 
     /**
