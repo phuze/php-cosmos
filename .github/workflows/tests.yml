@@ -7,7 +7,7 @@ on:
 jobs:
   test:
     name: PHP ${{ matrix.php }}, Guzzle ${{ matrix.guzzle }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +43,7 @@ jobs:
           # guzzle 6 has open security advisories, so newer versions of composer
           # refuse to install it. the older composer used on php 7.0 and 7.1
           # doesn't block it, and doesn't have this setting, so hide that error.
-          composer config audit.block-insecure false 2>/dev/null || true
+          composer config audit.block-insecure false > /dev/null 2>&1 || true
           composer require "guzzlehttp/guzzle:^${{ matrix.guzzle }}.0" --no-update --no-interaction
           composer update --prefer-dist --no-progress --no-interaction
 
@@ -56,6 +56,6 @@ jobs:
     name: All tests passed
     needs: test
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - run: test "${{ needs.test.result }}" = "success"
