@@ -134,7 +134,7 @@ class CosmosDb
             }
         }
         if (!$rid_db) {
-            $object = json_decode($this->createDatabase('{"id":"' . $db_name . '"}'));
+            $object = json_decode($this->createDatabase(json_encode(['id' => $db_name])));
             $rid_db = $object->_rid;
         }
 

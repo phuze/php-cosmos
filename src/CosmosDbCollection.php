@@ -29,20 +29,25 @@ class CosmosDbCollection
      * @param string $query Query
      * @param array $params
      * @param boolean $isCrossPartition used for cross partition query
+     * @param mixed $partitionValue partition key value, to query a single partition
      * @return array JSON strings
+     * @throws \InvalidArgumentException if the query or a parameter can't be encoded as JSON
      */
     public function query($query, $params = [], $isCrossPartition = false, $partitionValue = null)
     {
-        $paramsJson = [];
-        foreach ($params as $key => $val) {
-            $val = is_int($val) || is_float($val) ? $val : '"'. str_replace('"', '\\"', $val) .'"';
-
-            $paramsJson[] = '{"name": "' . str_replace('"', '\\"', $key) . '", "value": '.$val.'}';
+        # parameter values keep their JSON type, so true, false, null,
+        # numbers and arrays reach cosmos as themselves
+        $parameters = [];
+        foreach ($params as $name => $value) {
+            $parameters[] = ['name' => (string)$name, 'value' => $value];
         }
 
-        $query = '{"query": "' . str_replace('"', '\\"', $query) . '", "parameters": [' . implode(',', $paramsJson) . ']}';
+        $body = json_encode(['query' => $query, 'parameters' => $parameters]);
+        if ($body === false) {
+            throw new \InvalidArgumentException('Unable to encode query as JSON: ' . json_last_error_msg());
+        }
 
-        return $this->document_db->query($this->rid_db, $this->rid_col, $query, $isCrossPartition, $partitionValue);
+        return $this->document_db->query($this->rid_db, $this->rid_col, $body, $isCrossPartition, $partitionValue);
     }
 
 	/**
