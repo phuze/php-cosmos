@@ -91,9 +91,9 @@ class QueryBuilder
      * @return QueryBuilder
      */
     public function whereStartsWith(string $field, $value)
-	{
-		return $this->where("STARTSWITH($field, '{$value}')");
-	}
+    {
+        return $this->where("STARTSWITH($field, {$this->quote($value)})");
+    }
 
     /**
      * @param string $field
@@ -102,8 +102,8 @@ class QueryBuilder
      */
     public function whereEndsWith(string $field, $value)
     {
-		return $this->where("ENDSWITH($field, '{$value}')");
-	}
+        return $this->where("ENDSWITH($field, {$this->quote($value)})");
+    }
 
     /**
      * @param string $field
@@ -112,8 +112,8 @@ class QueryBuilder
      */
     public function whereContains(string $field, $value)
     {
-		return $this->where("CONTAINS($field, '{$value}'");
-	}
+        return $this->where("CONTAINS($field, {$this->quote($value)})");
+    }
 
     /**
      * @param string $field
@@ -121,11 +121,11 @@ class QueryBuilder
      * @return $this|QueryBuilder
      */
     public function whereIn(string $field, array $values)
-	{
-	    if (empty($values)) return $this;
+    {
+        if (empty($values)) return $this;
 
-		return $this->where("$field IN('".implode("', '", $values)."')");
-	}
+        return $this->where("$field IN(" . implode(", ", array_map([$this, 'quote'], $values)) . ")");
+    }
 
     /**
      * @param string $field
@@ -136,7 +136,22 @@ class QueryBuilder
     {
         if (empty($values)) return $this;
 
-        return $this->where("$field NOT IN('".implode("', '", $values)."')");
+        return $this->where("$field NOT IN(" . implode(", ", array_map([$this, 'quote'], $values)) . ")");
+    }
+
+    /**
+     * quote a value as a cosmos sql string literal, escaping quotes and backslashes
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private function quote($value)
+    {
+        $quoted = json_encode((string)$value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($quoted === false) {
+            throw new \InvalidArgumentException('Unable to quote value: ' . json_last_error_msg());
+        }
+        return $quoted;
     }
 
     /**
