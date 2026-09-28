@@ -32,6 +32,12 @@ class CosmosDbDatabase
         if (!$rid_col) {
             $col_body["id"] = $col_name;
             if ($partitionKey) {
+                # cosmos requires a path starting with a slash, so a key without
+                # one (ie: "country" or "billing.country") was always rejected.
+                # convert it to path form; ie: "/country" or "/billing/country"
+                if (strpos($partitionKey, '/') !== 0) {
+                    $partitionKey = '/' . str_replace('.', '/', $partitionKey);
+                }
                 $col_body["partitionKey"] = [
                     "paths" => [$partitionKey],
                     "kind" => "Hash"
