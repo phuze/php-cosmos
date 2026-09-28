@@ -12,6 +12,14 @@ composer require phuze/php-cosmos
 
 ## Changelog
 
+### v3.0.5
+- fixed `whereContains()` missing its closing parenthesis
+- fixed `save()` throwing a `TypeError` when no partition key is set, a regression in 3.0.4
+- fixed `delete()` and `save()` with slashed partition keys, such as `/form/type` or `/vendorName`
+- fixed `selectCollection()` when the partition key has no leading slash
+- fixed debug mode emptying responses
+- fixed deprecation warnings on PHP 8.2+ and Guzzle 7.11+
+
 ### v3.0.4
 - `save()` and `deleteAll()` now use the value from `setPartitionValue()`, even when no partition key is set
 
