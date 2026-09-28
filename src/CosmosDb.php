@@ -902,6 +902,36 @@ class CosmosDb
     }
 
     /**
+     * patchDocument
+     *
+     * not retried on a network error, because operations such as incr
+     * aren't safe to apply twice
+     *
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/patch-a-document
+     * @access public
+     * @param string $rid_id Resource ID
+     * @param string $rid_col Resource Collection ID
+     * @param string $rid_doc Resource Doc ID
+     * @param string $json JSON request; ie: {"operations": [...]}
+     * @param mixed $partitionKey partition key value
+     * @param array $headers Optional headers to send along with the request
+     * @return string JSON response
+     * @throws GuzzleException
+     */
+    public function patchDocument(string $rid_id, string $rid_col, string $rid_doc, string $json, $partitionKey = null, array $headers = [])
+    {
+        $authHeaders = $this->getAuthHeaders('PATCH', 'docs', $rid_doc);
+        $headers = array_merge($headers, $authHeaders);
+        $headers['Content-Length'] = strlen($json);
+        $headers['Content-Type'] = 'application/json_patch+json';
+        if ($partitionKey !== null) {
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
+        }
+
+        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "PATCH", $headers, $json, false)->getBody()->getContents();
+    }
+
+    /**
      * deleteDocument
      *
      * @link http://msdn.microsoft.com/en-us/library/azure/dn803952.aspx

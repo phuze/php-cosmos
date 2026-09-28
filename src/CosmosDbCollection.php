@@ -100,6 +100,21 @@ class CosmosDbCollection
     }
 
     /**
+     * patchDocument
+     *
+     * @access public
+     * @param string $rid document ResourceID (_rid)
+     * @param string $json JSON formatted patch; ie: {"operations": [...]}
+     * @param string $partitionKey
+     * @param array $headers Optional headers to send along with the request
+     * @return string JSON strings
+     */
+    public function patchDocument($rid, $json, $partitionKey = null, array $headers = [])
+    {
+        return $this->document_db->patchDocument($this->rid_db, $this->rid_col, $rid, $json, $partitionKey, $headers);
+    }
+
+    /**
      * deleteDocument
      *
      * @access public

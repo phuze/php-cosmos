@@ -453,6 +453,113 @@ class QueryBuilder
         return $resultObj->_rid ?? null;
     }
 
+    /* patch */
+
+    /**
+     * partially update a document. the partition value must be set with
+     * setPartitionValue() if the collection is partitioned. if where() has
+     * been set, the patch only applies if the document matches it.
+     *
+     * @link https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update
+     * @param string $rid_doc document _rid
+     * @param array $patchOps operations built with the getPatchOp*() methods, max 10 per request
+     * @return string|null
+     * @throws Exception
+     */
+    public function patch(string $rid_doc, array $patchOps)
+    {
+        if (count($patchOps) > 10) {
+            # throw the error cosmos would return, rather than waste a request
+            throw new Exception("400 : PATCH supports maximum of 10 operations per request");
+        }
+
+        $updates = [];
+        if ($this->where != "") {
+            $updates['condition'] = "from {$this->from} where {$this->where}";
+        }
+        $updates['operations'] = array_values($patchOps);
+
+        $result = $this->collection->patchDocument($rid_doc, json_encode($updates), $this->partitionValue, $this->triggersAsHeaders("patch"));
+        $resultObj = json_decode($result);
+
+        if (isset($resultObj->code) && isset($resultObj->message)) {
+            throw new Exception("$resultObj->code : $resultObj->message");
+        }
+
+        return $resultObj->_rid ?? null;
+    }
+
+    /**
+     * add a property, or insert into an array. an existing property is replaced.
+     *
+     * @param string $path JSON pointer; ie: /address/city. escape ~ as ~0 and / within a property name as ~1
+     * @param mixed $value
+     * @return array
+     */
+    public function getPatchOpAdd(string $path, $value)
+    {
+        return ['op' => 'add', 'path' => $path, 'value' => $value];
+    }
+
+    /**
+     * set a property, creating it if it doesn't exist. on an array index, replaces that element.
+     *
+     * @param string $path JSON pointer; ie: /address/city
+     * @param mixed $value
+     * @return array
+     */
+    public function getPatchOpSet(string $path, $value)
+    {
+        return ['op' => 'set', 'path' => $path, 'value' => $value];
+    }
+
+    /**
+     * replace a property. fails if it doesn't exist.
+     *
+     * @param string $path JSON pointer; ie: /address/city
+     * @param mixed $value
+     * @return array
+     */
+    public function getPatchOpReplace(string $path, $value)
+    {
+        return ['op' => 'replace', 'path' => $path, 'value' => $value];
+    }
+
+    /**
+     * remove a property or array element. fails if it doesn't exist.
+     *
+     * @param string $path JSON pointer; ie: /address/city
+     * @return array
+     */
+    public function getPatchOpRemove(string $path)
+    {
+        return ['op' => 'remove', 'path' => $path];
+    }
+
+    /**
+     * increment a number by the given amount. use a negative value to decrement.
+     *
+     * @param string $path JSON pointer; ie: /stock
+     * @param int|float $value
+     * @return array
+     */
+    public function getPatchOpIncrement(string $path, $value)
+    {
+        return ['op' => 'incr', 'path' => $path, 'value' => $value];
+    }
+
+    /**
+     * move a property to another path, removing it from the original
+     *
+     * @param string $fromPath JSON pointer to move from; ie: /address/town
+     * @param string $toPath JSON pointer to move to; ie: /address/city
+     * @return array
+     */
+    public function getPatchOpMove(string $fromPath, string $toPath)
+    {
+        return ['op' => 'move', 'from' => $fromPath, 'path' => $toPath];
+    }
+
     /* delete */
 
     /**
@@ -526,7 +633,7 @@ class QueryBuilder
     public function addTrigger(string $operation, string $type, string $id)
     {
         $operation = strtolower($operation);
-        if (!in_array($operation, ["all", "create", "delete", "replace"]))
+        if (!in_array($operation, ["all", "create", "delete", "replace", "patch"]))
             throw new Exception("Trigger: Invalid operation \"{$operation}\"");
 
         $type = strtolower($type);
@@ -548,7 +655,7 @@ class QueryBuilder
     {
         $headers = [];
 
-        // Add headers for the current operation type at $operation (create|delete!replace)
+        // Add headers for the current operation type at $operation (create|delete|replace|patch)
         if (isset($this->triggers[$operation])) {
             foreach ($this->triggers[$operation] as $name => $ids) {
                 $ids = is_array($ids) ? $ids : [$ids];
