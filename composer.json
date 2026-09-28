@@ -19,5 +19,11 @@
     "psr-4": {
       "Phuze\\PhpCosmos\\": "src/"
     }
+  },
+  "scripts": {
+    "test": "@php tests/run.php"
+  },
+  "scripts-descriptions": {
+    "test": "Run the test suite"
   }
 }
