@@ -13,7 +13,16 @@ composer require phuze/php-cosmos
 ## Changelog
 
 ### v3.0.4
-- bug fixes and other minor changes
+- `save()` and `deleteAll()` now use the value from `setPartitionValue()`, even when no partition key is set
+
+### v3.0.3
+- removed typed class properties, which need PHP 7.4, so the library loads on older PHP 7 versions
+
+### v3.0.2
+- fixed every request failing with "Call to a member function getBody() on string"
+
+### v3.0.1
+- fixed `composer.json` requiring PHP 8.0, which stopped PHP 7 from installing the library
 
 ### v3.0.0
 - restore support for PHP 7.x -- this library can be used with both 7.x and 8.x
