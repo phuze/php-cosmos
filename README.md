@@ -12,6 +12,9 @@ composer require phuze/php-cosmos:^3.0
 
 ## Changelog
 
+### v3.0.6
+- fixed a warning on PHP 7.2 when a query returns no documents
+
 ### v3.0.5
 - fixed `whereContains()` missing its closing parenthesis
 - fixed `save()` throwing a `TypeError` when no partition key is set, a regression in 3.0.4
