@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }}, Guzzle ${{ matrix.guzzle }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
+        guzzle: ['6', '7', '8']
+        exclude:
+          # guzzle 7 needs php 7.2.5 or later
+          - php: '7.0'
+            guzzle: '7'
+          - php: '7.1'
+            guzzle: '7'
+          # guzzle 8 needs php 7.4 or later
+          - php: '7.0'
+            guzzle: '8'
+          - php: '7.1'
+            guzzle: '8'
+          - php: '7.2'
+            guzzle: '8'
+          - php: '7.3'
+            guzzle: '8'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          # guzzle 6 has open security advisories, so newer versions of composer
+          # refuse to install it. older versions don't have this setting.
+          composer config audit.block-insecure false || true
+          composer require "guzzlehttp/guzzle:^${{ matrix.guzzle }}.0" --no-update --no-interaction
+          composer update --prefer-dist --no-progress --no-interaction
+
+      - name: Run tests
+        run: composer test
