@@ -299,7 +299,7 @@ class QueryBuilder
      * @param bool if true, return property structure formatted for use in Azure query string
      * @return string partition value
      */
-    public function findPartitionValue(object $document)
+    public function findPartitionValue($document)
     {
         # if the user supplied a partition value using setPartitionValue(),
         # use it rather than trying to match one elsewhere

@@ -12,6 +12,7 @@ class CosmosDb
     private $host;
     private $private_key;
     public $httpClientOptions;
+    public $debug = false;
 
     /**
      * __construct
@@ -24,7 +25,6 @@ class CosmosDb
     {
         $this->host = $host;
         $this->private_key = $private_key;
-        $this->debug = false;
     }
 
     /**
@@ -573,7 +573,7 @@ class CosmosDb
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createDocument(string $rid_id, string $rid_col, string $json, string $partitionKey = null, array $headers = [])
+    public function createDocument(string $rid_id, string $rid_col, string $json, $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('POST', 'docs', $rid_col);
         $headers = array_merge($headers, $authHeaders);
@@ -599,7 +599,7 @@ class CosmosDb
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceDocument(string $rid_id, string $rid_col, string $rid_doc, string $json, string $partitionKey = null, array $headers = [])
+    public function replaceDocument(string $rid_id, string $rid_col, string $rid_doc, string $json, $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('PUT', 'docs', $rid_doc);
         $headers = array_merge($headers, $authHeaders);
@@ -624,7 +624,7 @@ class CosmosDb
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function deleteDocument(string $rid_id, string $rid_col, string $rid_doc, string $partitionKey = null, array $headers = [])
+    public function deleteDocument(string $rid_id, string $rid_col, string $rid_doc, $partitionKey = null, array $headers = [])
     {
         $authHeaders = $this->getAuthHeaders('DELETE', 'docs', $rid_doc);
         $headers = array_merge($headers, $authHeaders);
