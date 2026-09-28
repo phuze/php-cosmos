@@ -308,11 +308,80 @@ class QueryBuilder
     }
 
     /**
+     * split the partition key into its property names.
+     * accept either slash or dot form; ie:
+     *   /something/property
+     *   something.property
+     *
+     * note: this syntax disparity comes from the way partition keys
+     *       are sometimes displayed within the Azure portal. It can
+     *       lead customers to interpret what the format should be.
+     *
+     * @return array property names; empty if no partition key is set
+     */
+    private function getPartitionKeyProperties()
+    {
+        if ($this->partitionKey === null || $this->partitionKey === '') {
+            return [];
+        }
+
+        $separator = strpos($this->partitionKey, '/') !== false ? '/' : '.';
+
+        return array_values(array_filter(explode($separator, $this->partitionKey), 'strlen'));
+    }
+
+    /**
+     * the partition key as a query expression; ie: "/customer/country" becomes c.customer.country
+     *
+     * @return string|null null if no partition key is set
+     */
+    private function getPartitionKeySelector()
+    {
+        $properties = $this->getPartitionKeyProperties();
+        if (empty($properties)) {
+            return null;
+        }
+
+        $selector = 'c';
+        foreach ($properties as $p) {
+            $selector .= preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $p) ? ".{$p}" : '[' . json_encode($p) . ']';
+        }
+
+        return $selector;
+    }
+
+    /**
+     * follow a path of property names through a decoded document
+     *
+     * @param mixed $data
+     * @param array $properties
+     * @param bool $found set to whether the whole path exists
+     * @return mixed the value at the end of the path
+     */
+    private function getPropertyValue($data, array $properties, &$found)
+    {
+        foreach ($properties as $p) {
+            if (is_object($data) && property_exists($data, $p)) {
+                $data = $data->{$p};
+            }
+            elseif (is_array($data) && array_key_exists($p, $data)) {
+                $data = $data[$p];
+            }
+            else {
+                $found = false;
+                return null;
+            }
+        }
+
+        $found = true;
+        return $data;
+    }
+
+    /**
      * Find and set the partition value
-     * 
-     * @param object document
-     * @param bool if true, return property structure formatted for use in Azure query string
-     * @return string partition value
+     *
+     * @param object|array $document
+     * @return mixed partition value, or null if there's no partition key
      */
     public function findPartitionValue($document)
     {
@@ -322,81 +391,42 @@ class QueryBuilder
             return $this->partitionValue;
         }
 
-        # if the partition key contains slashes or dots, the user
-        # is referencing a nested value, so we should find it
-        if ($this->isNested($this->partitionKey)) {
-
-            # explode the key into its properties
-            # accept either slash or dot form; ie:
-            #   /something/property
-            #   something.property
-            #
-            # note: this syntax disparity comes from the way partition keys
-            #       are sometimes displayed within the Azure portal. It can
-            #       lead customers to interpret what the format should be.
-            if (strpos($this->partitionKey, '/') !== false) {
-                $properties = array_values(array_filter(explode("/", $this->partitionKey)));
-            }
-            elseif (strpos($this->partitionKey, '.') !== false) {
-                $properties = array_values(array_filter(explode(".", $this->partitionKey)));
-            }
-
-            # when deleting a document, we first query in order to find the document _rid.
-            # the query selects both the c._rid and our partition key as a property (ie: c.country).
-            # keep in mind that our partion key may also refer to a nested value (ie: c.customer.country)
-
-            # if our response object matches our document property structure, then navigate
-            # the object to grab our partition value.
-            #    {
-            #       customer: {
-            #           country: 'Canada'
-            #       },
-            #       _rid: 'EAhKANCYa+eEhB4AAAAAAA=='
-            #    }
-            #
-            if(
-                property_exists((object)$document, $properties[0])
-                || array_key_exists($properties[0], (array)$document)
-            ) {
-                $nested = clone $document;
-                foreach( $properties as $p ) {
-                    $nested = (object)$nested->{$p};
-                }
-                if($nested->scalar && !empty($nested->scalar)) {
-                    return $nested->scalar;
-                }
-            }
-
-            # otherwise if our response object is flattened,
-            # then look for the last property of our nested parition key.
-            #    {
-            #       country: 'Canada',
-            #       _rid: 'EAhKANCYa+eEhB4AAAAAAA=='
-            #    }
-            #
-            $lastProperty = end($properties);
-            if(
-                array_key_exists($lastProperty, (array)$document)
-                || property_exists($document, $lastProperty)
-            ) {
-                return $document->{$lastProperty};
-            }
-
-            /*
-            # debug
-            echo "=============== DEBUG (QueryBuilder::findPartitionValue) ===============".PHP_EOL;
-            echo json_encode([
-                'isNested'          => $this->isNested($this->partitionKey),
-                'properties'        => $properties,
-                '$document->scalar' => $document->scalar,
-            ], JSON_PRETTY_PRINT).PHP_EOL;
-            */
+        # no partition key, so there's no value to find
+        $properties = $this->getPartitionKeyProperties();
+        if (empty($properties)) {
+            return null;
         }
-        # otherwise, assume the key is in the root of the
-        # document and return the value of the property key
-        else {
-            return $document->{$this->partitionKey};
+
+        # if our document matches the partition key's property structure,
+        # navigate it to grab our partition value.
+        #    {
+        #       customer: {
+        #           country: 'Canada'
+        #       },
+        #       _rid: 'EAhKANCYa+eEhB4AAAAAAA=='
+        #    }
+        #
+        $value = $this->getPropertyValue($document, $properties, $found);
+        if ($found) {
+            return $value;
         }
+
+        # when deleting a document, we first query in order to find the document _rid.
+        # the query selects both the c._rid and our partition key (ie: c.customer.country),
+        # and cosmos returns a nested property flattened under its last name.
+        #    {
+        #       country: 'Canada',
+        #       _rid: 'EAhKANCYa+eEhB4AAAAAAA=='
+        #    }
+        #
+        if (count($properties) > 1) {
+            $value = $this->getPropertyValue($document, [end($properties)], $found);
+            if ($found) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -423,6 +453,24 @@ class QueryBuilder
         return $resultObj->_rid ?? null;
     }
 
+    /* delete */
+
+    /**
+     * the fields a delete queries for: the _rid, plus the partition key to delete it by
+     *
+     * @return string
+     */
+    private function getDeleteSelect()
+    {
+        if ($this->fields != "") {
+            return $this->fields;
+        }
+
+        $selector = $this->getPartitionKeySelector();
+
+        return "c._rid" . ($selector !== null ? ", {$selector}" : "");
+    }
+
     /**
      * @param boolean $isCrossPartition
      * @return boolean
@@ -431,26 +479,9 @@ class QueryBuilder
     {
         $this->response = null;
 
-        $select = $this->fields != ""
-            ? $this->fields
-            : "c._rid" . ($this->partitionKey != null ? ", c." . $this->partitionKey : "");
-
-        $document = $this->select($select)->find($isCrossPartition)->toObject();
+        $document = $this->select($this->getDeleteSelect())->find($isCrossPartition)->toObject();
 
         if ($document) {
-
-            /*
-            # debug
-            echo "=============== DEBUG (QueryBuilder::delete) ===============".PHP_EOL;
-            echo json_encode([
-                '$this->fields'         => $this->fields,
-                '$this->partitionKey'   => $this->partitionKey,
-                '$select'               => $select,
-                '$document'             => $document,
-                'findPartitionValue()'  => $this->findPartitionValue($document),
-            ], JSON_PRETTY_PRINT).PHP_EOL;
-            */
-
             $this->response = $this->collection->deleteDocument(
                 $document->_rid,
                 $this->findPartitionValue($document),
@@ -470,12 +501,8 @@ class QueryBuilder
     {
         $this->response = null;
 
-        $select = ($this->fields != "")
-            ? $this->fields
-            : "c._rid" . ($this->partitionKey != null ? ", c." . $this->partitionKey : "");
-
         $response = [];
-        foreach ((array)$this->select($select)->findAll($isCrossPartition)->toObject() as $document) {
+        foreach ((array)$this->select($this->getDeleteSelect())->findAll($isCrossPartition)->toObject() as $document) {
             $response[] = $this->collection->deleteDocument(
                 $document->_rid,
                 $this->findPartitionValue($document),
