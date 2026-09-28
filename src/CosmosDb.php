@@ -102,12 +102,19 @@ class CosmosDb
 
         # debug
         if($this->debug) {
+            # rewind after reading, so the response can still be read once it's printed
+            $body = $response->getBody();
+            $contents = (string)$body;
+            if ($body->isSeekable()) {
+                $body->rewind();
+            }
+
             echo "=============== DEBUG (CosmosDb::request) ===============".PHP_EOL;
             echo json_encode([
                 'method'        => $method,
                 'config'        => array_merge($options, (array)$this->httpClientOptions),
                 'requestUrl'    => "{$this->host}{$path}",
-                'response'      => json_encode($response->getBody()->getContents()),
+                'response'      => json_encode($contents),
             ], JSON_PRETTY_PRINT).PHP_EOL;
         }
 
