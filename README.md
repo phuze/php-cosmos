@@ -1,5 +1,12 @@
 # php-cosmos
 
+[![Tests](https://img.shields.io/github/actions/workflow/status/phuze/php-cosmos/tests.yml?branch=main&label=tests&logo=githubactions&logoColor=white)](https://github.com/phuze/php-cosmos/actions/workflows/tests.yml)
+[![Latest Version](https://img.shields.io/packagist/v/phuze/php-cosmos?logo=packagist&logoColor=white)](https://packagist.org/packages/phuze/php-cosmos)
+[![PHP Version](https://img.shields.io/packagist/dependency-v/phuze/php-cosmos/php?logo=php&logoColor=white)](#requirements)
+[![Guzzle Version](https://img.shields.io/packagist/dependency-v/phuze/php-cosmos/guzzlehttp/guzzle?label=guzzle)](#requirements)
+[![Total Downloads](https://img.shields.io/packagist/dt/phuze/php-cosmos)](https://packagist.org/packages/phuze/php-cosmos/stats)
+[![License](https://img.shields.io/packagist/l/phuze/php-cosmos)](LICENSE)
+
 A PHP client for Azure Cosmos DB.
 
 ## Installation
