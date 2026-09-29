@@ -7,7 +7,15 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/phuze/php-cosmos)](https://packagist.org/packages/phuze/php-cosmos/stats)
 [![License](https://img.shields.io/packagist/l/phuze/php-cosmos)](LICENSE)
 
-A PHP client for Azure Cosmos DB.
+A lightweight PHP client for Azure Cosmos DB, supporting PHP 7.0 and later.
+
+- **PHP compatibility:** PHP 7.0 through 8.x, with Guzzle 6, 7 or 8
+- **Tested:** Every supported PHP and Guzzle combination is tested on each push
+- **No SDK required:** Uses the Cosmos DB REST API directly
+- **Query builder:** Supports cross-partition queries and automatic pagination
+- **Document operations:** Read, insert, replace, upsert, patch and delete documents
+- **Connection handling:** Reuses connections, times out slow requests, retries dropped connections, and optionally retries rate-limited (`429`) requests
+- **Logging:** Supports any PSR-3 logger, such as Monolog, for request and retry logging
 
 ## Installation
 
@@ -189,8 +197,7 @@ Most apps only need to change `phuze/php-cosmos` to `^4.0` in `composer.json`. C
 
 ## Notes
 
-- Supports PHP 7.0 and later, so it also runs on legacy systems that can't move to PHP 8 yet
-- Talks to Cosmos DB through Microsoft's REST API (version `2018-12-31`), so it only needs Guzzle and the `curl` extension, not an SDK
+- Uses version `2018-12-31` of the Cosmos DB REST API
 - Based on [AzureDocumentDB-PHP](https://github.com/cocteau666/AzureDocumentDB-PHP) and [CosmosDb](https://github.com/jupitern/cosmosdb)
 - Some [cross-partition queries](docs/querying.md#cross-partition-queries) (e.g. those with `ORDER BY`, `TOP` or aggregates) can't be served by the Cosmos DB gateway, so they're run against each partition key range in turn, and `ORDER BY` and `TOP` apply within each range rather than across the whole result
 
