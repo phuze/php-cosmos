@@ -67,6 +67,11 @@ See the [documentation](docs/README.md) for more examples:
 
 ## Changelog
 
+### v4.1.0
+- Added new [UPSERT support](docs/inserting-and-updating.md#upserting). `upsert()` creates a document, or replaces it if one with the same `id` already exists, so you no longer need a document's `_rid` to update it. Triggers can run on upserts too
+- Added [single-document reads](docs/querying.md#reading-a-document). `$collection->getDocument()` fetches a document by its `_rid`, which is cheaper and faster than a query
+- Added a way to [skip the database and collection lookups](docs/connecting.md#skipping-the-lookups). Save the `_rid`s once, and later requests no longer need the two extra calls that `selectDB()` and `selectCollection()` make
+
 ### v4.0.1
 - Renamed variables and some method parameters for clarity, using camelCase consistently
 - Cleaned up the doc blocks for a better IDE experience
