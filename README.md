@@ -184,9 +184,9 @@ Most apps only need to change `phuze/php-cosmos` to `^4.0` in `composer.json`. C
 
 ## Notes
 
+- Supports PHP 7.0 and later, so it also runs on legacy systems that can't move to PHP 8 yet
 - Talks to Cosmos DB through Microsoft's REST API (version `2018-12-31`), so it only needs Guzzle and the `curl` extension, not an SDK
 - Based on [AzureDocumentDB-PHP](https://github.com/cocteau666/AzureDocumentDB-PHP) and [CosmosDb](https://github.com/jupitern/cosmosdb)
-- The jupitern/cosmosdb library removed PHP 7 support as of v2.6.0, but I still have legacy systems that run on PHP 7.x, so rather than ask jupitern to take on older PHP versions again, it made more sense to maintain my own library that supports them
 - Some [cross-partition queries](docs/querying.md#cross-partition-queries) (e.g. those with `ORDER BY`, `TOP` or aggregates) can't be served by the Cosmos DB gateway, so they're run against each partition key range in turn, and `ORDER BY` and `TOP` apply within each range rather than across the whole result
 
 ## Development
