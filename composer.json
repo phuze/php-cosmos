@@ -1,7 +1,7 @@
 {
   "name"       : "phuze/php-cosmos",
   "description": "A PHP client for Azure Cosmos DB",
-  "keywords"   : ["azure", "cosmosdb", "sql", "nosql", "rest", "api"],
+  "keywords"   : ["azure", "cosmos", "cosmosdb", "cosmos-db", "nosql", "sql", "rest", "api", "php"],
   "homepage"   : "https://github.com/phuze/php-cosmos",
   "license"    : "MIT",
   "support": {
