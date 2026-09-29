@@ -4,9 +4,18 @@ namespace Phuze\PhpCosmos;
 
 class CosmosDbDatabase
 {
+    /** @var CosmosDb */
     private $document_db;
+
+    /** @var string */
     private $rid_db;
 
+    /**
+     * Create a database object. This is usually done by CosmosDb::selectDB().
+     *
+     * @param CosmosDb $document_db connection to the account
+     * @param string $rid_db database _rid
+     */
     public function __construct($document_db, $rid_db)
     {
         $this->document_db = $document_db;
@@ -14,11 +23,11 @@ class CosmosDbDatabase
     }
 
     /**
-     * selectCollection
+     * Select a collection by name, creating it if it doesn't exist.
      *
-     * @access public
-     * @param string $col_name Collection name
+     * @param string $col_name collection name
      * @param string|null $partitionKey partition key path used if the collection is created; ie: "/country" or "billing.country"
+     * @return CosmosDbCollection|false
      */
     public function selectCollection($col_name, $partitionKey = null)
     {

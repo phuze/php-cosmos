@@ -4,17 +4,22 @@ namespace Phuze\PhpCosmos;
 
 class CosmosDbCollection
 {
+    /** @var CosmosDb */
     private $document_db;
+
+    /** @var string */
     private $rid_db;
+
+    /** @var string */
     private $rid_col;
 
     /**
-     * __construct
+     * Create a collection object. This is usually done by
+     * CosmosDbDatabase::selectCollection().
      *
-     * @access public
-     * @param CosmosDb $document_db CosmosDb object
-     * @param string $rid_db Database ID
-     * @param string $rid_col Collection ID
+     * @param CosmosDb $document_db connection to the account
+     * @param string $rid_db database _rid
+     * @param string $rid_col collection _rid
      */
     public function __construct(CosmosDb $document_db, string $rid_db, string $rid_col)
     {
@@ -24,13 +29,13 @@ class CosmosDbCollection
     }
 
     /**
-     * query
-     * @access public
-     * @param string $query Query
-     * @param array $params
-     * @param boolean $isCrossPartition used for cross partition query
+     * Run a query against this collection and return every page of results.
+     *
+     * @param string $query SQL query; ie: SELECT * FROM c WHERE c.age > @age
+     * @param array $params query parameters; ie: ['@age' => 30]
+     * @param bool $isCrossPartition query across partitions
      * @param mixed $partitionValue partition key value, to query a single partition
-     * @return array JSON strings
+     * @return string[] JSON response for each page
      * @throws \InvalidArgumentException if the query or a parameter can't be encoded as JSON
      */
     public function query($query, $params = [], $isCrossPartition = false, $partitionValue = null)
@@ -51,9 +56,9 @@ class CosmosDbCollection
     }
 
 	/**
-	 * getPkRanges
+	 * Get this collection's partition key ranges.
 	 *
-	 * @return mixed
+	 * @return object decoded response, with the ranges in PartitionKeyRanges
 	 */
 	public function getPkRanges()
 	{
@@ -61,9 +66,10 @@ class CosmosDbCollection
 	}
 
 	/**
-	 * getPkFullRange
+	 * Get this collection's _rid followed by the id of each partition key range,
+	 * comma separated, such as z6odAJjXSto=,0,1.
 	 *
-	 * @return mixed
+	 * @return string
 	 */
 	public function getPkFullRange()
 	{
@@ -71,13 +77,12 @@ class CosmosDbCollection
 	}
 
     /**
-     * createDocument
+     * Create a document.
      *
-     * @access public
-     * @param string $json JSON formatted document
-     * @param string $partitionKey
-     * @param array $headers Optional headers to send along with the request
-     * @return string JSON strings
+     * @param string $json the document as JSON
+     * @param mixed $partitionKey partition key value
+     * @param array $headers extra headers to send with the request
+     * @return string JSON response
      */
     public function createDocument($json, $partitionKey = null, array $headers = [])
     {
@@ -85,14 +90,13 @@ class CosmosDbCollection
     }
 
     /**
-     * replaceDocument
+     * Replace a document.
      *
-     * @access public
-     * @param  string $rid document ResourceID (_rid)
-     * @param string $json JSON formatted document
-     * @param string $partitionKey
-     * @param array $headers Optional headers to send along with the request
-     * @return string JSON strings
+     * @param string $rid document _rid
+     * @param string $json the new document as JSON
+     * @param mixed $partitionKey partition key value
+     * @param array $headers extra headers to send with the request
+     * @return string JSON response
      */
     public function replaceDocument($rid, $json, $partitionKey = null, array $headers = [])
     {
@@ -100,14 +104,13 @@ class CosmosDbCollection
     }
 
     /**
-     * patchDocument
+     * Partially update a document.
      *
-     * @access public
-     * @param string $rid document ResourceID (_rid)
-     * @param string $json JSON formatted patch; ie: {"operations": [...]}
-     * @param string $partitionKey
-     * @param array $headers Optional headers to send along with the request
-     * @return string JSON strings
+     * @param string $rid document _rid
+     * @param string $json patch request; ie: {"operations": [...]}
+     * @param mixed $partitionKey partition key value
+     * @param array $headers extra headers to send with the request
+     * @return string JSON response
      */
     public function patchDocument($rid, $json, $partitionKey = null, array $headers = [])
     {
@@ -115,13 +118,12 @@ class CosmosDbCollection
     }
 
     /**
-     * deleteDocument
+     * Delete a document.
      *
-     * @access public
-     * @param  string $rid document ResourceID (_rid)
-     * @param string $partitionKey
-     * @param array $headers Optional headers to send along with the request
-     * @return string JSON strings
+     * @param string $rid document _rid
+     * @param mixed $partitionKey partition key value
+     * @param array $headers extra headers to send with the request
+     * @return string empty on success
      */
     public function deleteDocument($rid, $partitionKey = null, array $headers = [])
     {
@@ -155,66 +157,145 @@ class CosmosDbCollection
       }
     */
     
+    /**
+     * List the stored procedures in this collection.
+     *
+     * @return string JSON response
+     */
     public function listStoredProcedures()
     {
         return $this->document_db->listStoredProcedures($this->rid_db, $this->rid_col);
     }
 
+    /**
+     * Run a stored procedure.
+     *
+     * @param string $sproc_name stored procedure _rid
+     * @param string $json input parameters, as a JSON array; ie: ["Canada", 30]
+     * @return string JSON response
+     */
     public function executeStoredProcedure($sproc_name, $json)
     {
         return $this->document_db->executeStoredProcedure($this->rid_db, $this->rid_col, $sproc_name, $json);
     }
 
+    /**
+     * Create a stored procedure in this collection.
+     *
+     * @param string $json stored procedure definition; ie: {"id": "...", "body": "function () { ... }"}
+     * @return string JSON response
+     */
     public function createStoredProcedure($json)
     {
         return $this->document_db->createStoredProcedure($this->rid_db, $this->rid_col, $json);
     }
 
+    /**
+     * Replace a stored procedure.
+     *
+     * @param string $sproc_name stored procedure _rid
+     * @param string $json new stored procedure definition
+     * @return string JSON response
+     */
     public function replaceStoredProcedure($sproc_name, $json)
     {
         return $this->document_db->replaceStoredProcedure($this->rid_db, $this->rid_col, $sproc_name, $json);
     }
 
+    /**
+     * Delete a stored procedure.
+     *
+     * @param string $sproc_name stored procedure _rid
+     * @return string empty on success
+     */
     public function deleteStoredProcedure($sproc_name)
     {
         return $this->document_db->deleteStoredProcedure($this->rid_db, $this->rid_col, $sproc_name);
     }
 
+    /**
+     * List the user-defined functions in this collection.
+     *
+     * @return string JSON response
+     */
     public function listUserDefinedFunctions()
     {
         return $this->document_db->listUserDefinedFunctions($this->rid_db, $this->rid_col);
     }
 
+    /**
+     * Create a user-defined function in this collection.
+     *
+     * @param string $json function definition; ie: {"id": "...", "body": "function () { ... }"}
+     * @return string JSON response
+     */
     public function createUserDefinedFunction($json)
     {
         return $this->document_db->createUserDefinedFunction($this->rid_db, $this->rid_col, $json);
     }
 
+    /**
+     * Replace a user-defined function.
+     *
+     * @param string $udf user-defined function _rid
+     * @param string $json new function definition
+     * @return string JSON response
+     */
     public function replaceUserDefinedFunction($udf, $json)
     {
         return $this->document_db->replaceUserDefinedFunction($this->rid_db, $this->rid_col, $udf, $json);
     }
 
+    /**
+     * Delete a user-defined function.
+     *
+     * @param string $udf user-defined function _rid
+     * @return string empty on success
+     */
     public function deleteUserDefinedFunction($udf)
     {
         return $this->document_db->deleteUserDefinedFunction($this->rid_db, $this->rid_col, $udf);
     }
 
+    /**
+     * List the triggers in this collection.
+     *
+     * @return string JSON response
+     */
     public function listTriggers()
     {
         return $this->document_db->listTriggers($this->rid_db, $this->rid_col);
     }
 
+    /**
+     * Create a trigger in this collection.
+     *
+     * @param string $json trigger definition; ie: {"id": "...", "body": "function () { ... }", "triggerType": "Pre", "triggerOperation": "All"}
+     * @return string JSON response
+     */
     public function createTrigger($json)
     {
         return $this->document_db->createTrigger($this->rid_db, $this->rid_col, $json);
     }
 
+    /**
+     * Replace a trigger.
+     *
+     * @param string $trigger trigger _rid
+     * @param string $json new trigger definition
+     * @return string JSON response
+     */
     public function replaceTrigger($trigger, $json)
     {
         return $this->document_db->replaceTrigger($this->rid_db, $this->rid_col, $trigger, $json);
     }
 
+    /**
+     * Delete a trigger.
+     *
+     * @param string $trigger trigger _rid
+     * @return string empty on success
+     */
     public function deleteTrigger($trigger)
     {
         return $this->document_db->deleteTrigger($this->rid_db, $this->rid_col, $trigger);

@@ -6,23 +6,50 @@ use \Exception;
 
 class QueryBuilder
 {
+    /** @var CosmosDbCollection|null */
     private $collection = null;
+
+    /** @var string|null */
     private $partitionKey = null;
+
+    /** @var mixed */
     private $partitionValue = null;
+
+    /** @var string */
     private $queryString = "";
+
+    /** @var string */
     private $fields = "";
+
+    /** @var string */
     private $from = "c";
+
+    /** @var string */
     private $join = "";
+
+    /** @var string */
     private $where = "";
+
+    /** @var string|null */
     private $order = null;
+
+    /** @var int|null */
     private $limit = null;
+
+    /** @var array trigger ids, by operation and type */
     private $triggers = [];
+
+    /** @var array */
     private $params = [];
+
+    /** @var string[]|string|null raw responses from the last request */
     private $response = null;
+
+    /** @var bool whether the last query was findAll() */
     private $multipleResults = false;
 
     /**
-     * Initializes the Table.
+     * Create a new query builder.
      *
      * @return static
      */
@@ -32,6 +59,8 @@ class QueryBuilder
     }
 
     /**
+     * Set the collection to query, save to or delete from.
+     *
      * @param CosmosDbCollection $collection
      * @return $this
      */
@@ -42,7 +71,10 @@ class QueryBuilder
     }
 
     /**
-     * @param array|string $fields
+     * Set the fields to select, instead of *. An array of property names becomes
+     * c["name"] selectors, and a string is used as is.
+     *
+     * @param array|string $fields ie: ['id', 'name'] or "c.id, c.name"
      * @return $this
      */
     public function select($fields)
@@ -54,6 +86,8 @@ class QueryBuilder
     }
 
     /**
+     * Set the FROM clause, which defaults to c.
+     *
      * @param string $from
      * @return $this
      */
@@ -64,7 +98,9 @@ class QueryBuilder
     }
 
     /**
-     * @param string $join
+     * Add a JOIN clause.
+     *
+     * @param string $join ie: JOIN t IN c.tags
      * @return $this
      */
     public function join(string $join)
@@ -74,7 +110,9 @@ class QueryBuilder
     }
 
     /**
-     * @param string $where
+     * Add a condition. Conditions are combined with AND.
+     *
+     * @param string $where ie: c.age > @age
      * @return $this
      */
     public function where(string $where)
@@ -86,9 +124,11 @@ class QueryBuilder
     }
 
     /**
-     * @param string $field
-     * @param mixed $value
-     * @return QueryBuilder
+     * Add a condition that a field starts with a value.
+     *
+     * @param string $field ie: c.name
+     * @param mixed $value quoted as a string
+     * @return $this
      */
     public function whereStartsWith(string $field, $value)
     {
@@ -96,9 +136,11 @@ class QueryBuilder
     }
 
     /**
-     * @param string $field
-     * @param mixed $value
-     * @return QueryBuilder
+     * Add a condition that a field ends with a value.
+     *
+     * @param string $field ie: c.name
+     * @param mixed $value quoted as a string
+     * @return $this
      */
     public function whereEndsWith(string $field, $value)
     {
@@ -106,9 +148,11 @@ class QueryBuilder
     }
 
     /**
-     * @param string $field
-     * @param mixed $value
-     * @return QueryBuilder
+     * Add a condition that a field contains a value.
+     *
+     * @param string $field ie: c.name
+     * @param mixed $value quoted as a string
+     * @return $this
      */
     public function whereContains(string $field, $value)
     {
@@ -116,9 +160,11 @@ class QueryBuilder
     }
 
     /**
-     * @param string $field
-     * @param array $values
-     * @return $this|QueryBuilder
+     * Add a condition that a field matches one of the values. An empty array adds nothing.
+     *
+     * @param string $field ie: c.country
+     * @param array $values each quoted as a string
+     * @return $this
      */
     public function whereIn(string $field, array $values)
     {
@@ -128,9 +174,11 @@ class QueryBuilder
     }
 
     /**
-     * @param string $field
-     * @param array $values
-     * @return $this|QueryBuilder
+     * Add a condition that a field matches none of the values. An empty array adds nothing.
+     *
+     * @param string $field ie: c.country
+     * @param array $values each quoted as a string
+     * @return $this
      */
     public function whereNotIn(string $field, array $values)
     {
@@ -140,7 +188,7 @@ class QueryBuilder
     }
 
     /**
-     * quote a value as a cosmos sql string literal, escaping quotes and backslashes
+     * Quote a value as a Cosmos DB SQL string literal, escaping quotes and backslashes.
      *
      * @param mixed $value
      * @return string
@@ -155,7 +203,9 @@ class QueryBuilder
     }
 
     /**
-     * @param string $order
+     * Set the ORDER BY clause.
+     *
+     * @param string $order ie: c.name ASC
      * @return $this
      */
     public function order(string $order)
@@ -165,6 +215,8 @@ class QueryBuilder
     }
 
     /**
+     * Limit the number of results findAll() returns.
+     *
      * @param int $limit
      * @return $this
      */
@@ -175,7 +227,9 @@ class QueryBuilder
     }
 
     /**
-     * @param array $params
+     * Set the query parameters.
+     *
+     * @param array $params ie: ['@age' => 30]
      * @return $this
      */
     public function params(array $params)
@@ -185,7 +239,10 @@ class QueryBuilder
     }
 
     /**
-     * @param boolean $isCrossPartition
+     * Run the query for every matching document. Read the results with
+     * toArray(), toObject() or toJson().
+     *
+     * @param bool $isCrossPartition query across partitions
      * @return $this
      */
     public function findAll(bool $isCrossPartition = false)
@@ -208,7 +265,10 @@ class QueryBuilder
     }
 
     /**
-     * @param boolean $isCrossPartition
+     * Run the query for the first matching document. Read the result with
+     * toArray(), toObject() or getValue().
+     *
+     * @param bool $isCrossPartition query across partitions
      * @return $this
      */
     public function find(bool $isCrossPartition = false)
@@ -230,7 +290,10 @@ class QueryBuilder
     }
 
     /**
-     * @param $fieldName
+     * Set the collection's partition key, which is used to find a document's
+     * partition value when saving or deleting.
+     *
+     * @param string $fieldName partition key path; ie: /country or customer.country
      * @return $this
      */
     public function setPartitionKey($fieldName)
@@ -241,7 +304,9 @@ class QueryBuilder
     }
 
     /**
-     * @return null
+     * Get the partition key set with setPartitionKey().
+     *
+     * @return string|null
      */
     public function getPartitionKey()
 	{
@@ -249,7 +314,10 @@ class QueryBuilder
     }
     
     /**
-     * @param $fieldName
+     * Set the partition key value, so queries only search that partition. It's
+     * also used by save(), patch() and delete(), ahead of any value in the document.
+     *
+     * @param mixed $fieldName partition key value; ie: Canada
      * @return $this
      */
     public function setPartitionValue($fieldName)
@@ -260,7 +328,9 @@ class QueryBuilder
     }
 
     /**
-     * @return null
+     * Get the partition key value set with setPartitionValue().
+     *
+     * @return mixed
      */
     public function getPartitionValue()
 	{
@@ -268,7 +338,10 @@ class QueryBuilder
 	}
 
     /**
-     * @param string $fieldName
+     * Append to a stored query string, which getQueryString() returns. It isn't
+     * used when running a query.
+     *
+     * @param string $fieldName text to append
      * @return $this
      */
     public function setQueryString(string $fieldName)
@@ -278,7 +351,9 @@ class QueryBuilder
     }
 
     /**
-     * @return string|null
+     * Get the query string built with setQueryString().
+     *
+     * @return string
      */
     public function getQueryString()
     {
@@ -286,6 +361,9 @@ class QueryBuilder
 	}
 
     /**
+     * Check whether a partition key refers to a nested property, such as
+     * /customer/country or customer.country.
+     *
      * @param string $partitionKey
      * @return bool
      */
@@ -308,14 +386,14 @@ class QueryBuilder
     }
 
     /**
-     * split the partition key into its property names.
-     * accept either slash or dot form; ie:
+     * Split the partition key into its property names. Either slash or dot
+     * form is accepted:
      *   /something/property
      *   something.property
      *
-     * note: this syntax disparity comes from the way partition keys
-     *       are sometimes displayed within the Azure portal. It can
-     *       lead customers to interpret what the format should be.
+     * Note: this syntax disparity comes from the way partition keys
+     *       are sometimes displayed within the Azure portal, which can
+     *       leave customers unsure which format to use.
      *
      * @return array property names; empty if no partition key is set
      */
@@ -331,7 +409,8 @@ class QueryBuilder
     }
 
     /**
-     * the partition key as a query expression; ie: "/customer/country" becomes c.customer.country
+     * Get the partition key as a query expression, so "/customer/country"
+     * becomes c.customer.country.
      *
      * @return string|null null if no partition key is set
      */
@@ -351,7 +430,7 @@ class QueryBuilder
     }
 
     /**
-     * follow a path of property names through a decoded document
+     * Follow a path of property names through a decoded document.
      *
      * @param mixed $data
      * @param array $properties
@@ -378,10 +457,11 @@ class QueryBuilder
     }
 
     /**
-     * Find and set the partition value
+     * Find a document's partition value. A value set with setPartitionValue()
+     * is used first.
      *
      * @param object|array $document
-     * @return mixed partition value, or null if there's no partition key
+     * @return mixed partition value, or null if it can't be found
      */
     public function findPartitionValue($document)
     {
@@ -430,8 +510,10 @@ class QueryBuilder
     }
 
     /**
-     * @param $document
-     * @return string|null
+     * Create a document, or replace it if it has a _rid.
+     *
+     * @param object|array $document
+     * @return string|null the saved document's _rid
      * @throws Exception
      */
     public function save($document)
@@ -456,14 +538,14 @@ class QueryBuilder
     /* patch */
 
     /**
-     * partially update a document. the partition value must be set with
-     * setPartitionValue() if the collection is partitioned. if where() has
+     * Partially update a document. The partition value must be set with
+     * setPartitionValue() if the collection is partitioned. If where() has
      * been set, the patch only applies if the document matches it.
      *
      * @link https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update
      * @param string $rid_doc document _rid
      * @param array $patchOps operations built with the getPatchOp*() methods, max 10 per request
-     * @return string|null
+     * @return string|null the patched document's _rid
      * @throws Exception
      */
     public function patch(string $rid_doc, array $patchOps)
@@ -490,7 +572,7 @@ class QueryBuilder
     }
 
     /**
-     * add a property, or insert into an array. an existing property is replaced.
+     * Add a property, or insert into an array. An existing property is replaced.
      *
      * @param string $path JSON pointer; ie: /address/city. escape ~ as ~0 and / within a property name as ~1
      * @param mixed $value
@@ -502,7 +584,8 @@ class QueryBuilder
     }
 
     /**
-     * set a property, creating it if it doesn't exist. on an array index, replaces that element.
+     * Set a property, creating it if it doesn't exist. On an array index, it
+     * replaces that element.
      *
      * @param string $path JSON pointer; ie: /address/city
      * @param mixed $value
@@ -514,7 +597,7 @@ class QueryBuilder
     }
 
     /**
-     * replace a property. fails if it doesn't exist.
+     * Replace a property. This fails if it doesn't exist.
      *
      * @param string $path JSON pointer; ie: /address/city
      * @param mixed $value
@@ -526,7 +609,7 @@ class QueryBuilder
     }
 
     /**
-     * remove a property or array element. fails if it doesn't exist.
+     * Remove a property or array element. This fails if it doesn't exist.
      *
      * @param string $path JSON pointer; ie: /address/city
      * @return array
@@ -537,7 +620,7 @@ class QueryBuilder
     }
 
     /**
-     * increment a number by the given amount. use a negative value to decrement.
+     * Increment a number by the given amount. Use a negative value to decrement.
      *
      * @param string $path JSON pointer; ie: /stock
      * @param int|float $value
@@ -549,7 +632,7 @@ class QueryBuilder
     }
 
     /**
-     * move a property to another path, removing it from the original
+     * Move a property to another path, removing it from the original.
      *
      * @param string $fromPath JSON pointer to move from; ie: /address/town
      * @param string $toPath JSON pointer to move to; ie: /address/city
@@ -563,7 +646,8 @@ class QueryBuilder
     /* delete */
 
     /**
-     * the fields a delete queries for: the _rid, plus the partition key to delete it by
+     * Get the fields a delete queries for: the _rid, plus the partition key to
+     * delete it by.
      *
      * @return string
      */
@@ -579,8 +663,10 @@ class QueryBuilder
     }
 
     /**
-     * @param boolean $isCrossPartition
-     * @return boolean
+     * Delete the first document matching the query.
+     *
+     * @param bool $isCrossPartition query across partitions
+     * @return bool false if no document matched
      */
     public function delete($isCrossPartition = false)
     {
@@ -601,8 +687,10 @@ class QueryBuilder
     }
 
     /**
-     * @param boolean $isCrossPartition
-     * @return boolean
+     * Delete every document matching the query.
+     *
+     * @param bool $isCrossPartition query across partitions
+     * @return bool always true, even if no document matched
      */
     public function deleteAll(bool $isCrossPartition = false)
     {
@@ -624,11 +712,13 @@ class QueryBuilder
     /* triggers */
 
     /**
-     * @param string $operation
-     * @param string $type
-     * @param string $id
-     * @return QueryBuilder
-     * @throws Exception
+     * Run a pre or post trigger with an operation.
+     *
+     * @param string $operation all, create, delete, replace or patch
+     * @param string $type pre or post
+     * @param string $id trigger id
+     * @return $this
+     * @throws Exception if the operation or type isn't valid
      */
     public function addTrigger(string $operation, string $type, string $id)
     {
@@ -648,7 +738,10 @@ class QueryBuilder
     }
 
     /**
-     * @param string $operation
+     * Get the trigger headers for an operation, including triggers added for
+     * all operations.
+     *
+     * @param string $operation create, delete, replace or patch
      * @return array
      */
     protected function triggersAsHeaders(string $operation)
@@ -678,6 +771,8 @@ class QueryBuilder
     /* helpers */
 
     /**
+     * Get the results as one JSON response, with the documents from every page combined.
+     *
      * @return string
      */
     public function toJson()
@@ -705,8 +800,11 @@ class QueryBuilder
     }
 
     /**
-     * @param $arrayKey
-     * @return mixed
+     * Get the results as objects: an array of documents after findAll(), or a
+     * single document (or null) after find().
+     *
+     * @param string|null $arrayKey property to key the results by, after findAll()
+     * @return array|object|null
      */
     public function toObject($arrayKey = null)
     {
@@ -737,8 +835,11 @@ class QueryBuilder
     }
 
     /**
-     * @param $arrayKey
-     * @return array|null
+     * Get the results as arrays: an array of documents after findAll(), or a
+     * single document after find(), which is empty if none matched.
+     *
+     * @param string|null $arrayKey property to key the results by, after findAll()
+     * @return array
      */
     public function toArray($arrayKey = null)
     {
@@ -754,8 +855,10 @@ class QueryBuilder
     }
 
     /**
-     * @param $fieldName
-     * @param null $default
+     * Get a field of the document found by find().
+     *
+     * @param string $fieldName
+     * @param mixed $default returned if the field isn't set
      * @return mixed
      */
     public function getValue($fieldName, $default = null)

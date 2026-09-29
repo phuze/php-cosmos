@@ -13,22 +13,36 @@ class CosmosDb
 {
     const VERSION = '4.0.0';
 
+    /** @var string */
     private $host;
+
+    /** @var string */
     private $private_key;
+
+    /** @var Client|null */
     private $httpClient = null;
+
+    /** @var LoggerInterface|null */
     private $logger = null;
+
+    /** @var array partition key ranges, cached by database and collection _rid */
     private $pkRanges = [];
+
+    /** @var int */
     private $maxThrottleRetries = 0;
+
+    /** @var int */
     private $maxThrottleWaitMs = 0;
+
+    /** @var array guzzle options, set with setHttpClientOptions() */
     public $httpClientOptions = [];
+
+    /** @var bool print each request and its response */
     public $debug = false;
 
     /**
-     * __construct
-     *
-     * @access public
-     * @param string $host URI of hostname
-     * @param string $private_key Primary (or Secondary key) private key
+     * @param string $host account endpoint; ie: https://myaccount.documents.azure.com
+     * @param string $private_key the account's primary or secondary key
      */
     public function __construct(string $host, string $private_key)
     {
@@ -37,10 +51,11 @@ class CosmosDb
     }
 
     /**
-     * set guzzle http client options using an associative array.
-     * these are merged over the defaults (60s timeout, 5s connect timeout).
+     * Set the Guzzle HTTP client options using an associative array.
+     * These are merged over the defaults (60s timeout, 5s connect timeout).
      *
      * @param array $options
+     * @return void
      */
     public function setHttpClientOptions(array $options = [])
     {
@@ -51,12 +66,14 @@ class CosmosDb
     }
 
     /**
-     * retry requests rejected with 429 (rate limited). off by default, so a 429
-     * is thrown to the caller. each retry waits for the time cosmos asks for in
-     * the x-ms-retry-after-ms header. the defaults match microsoft's own SDKs.
+     * Retry requests rejected with 429 (rate limited). This is off by default,
+     * so a 429 is thrown to the caller. Each retry waits for the time Cosmos DB
+     * asks for in the x-ms-retry-after-ms header. The defaults match Microsoft's
+     * own SDKs.
      *
      * @param int $maxRetries maximum retries per request. 0 disables retrying.
      * @param int $maxWaitMs maximum total time to wait across retries of one request, in milliseconds.
+     * @return void
      */
     public function setRetryOptions(int $maxRetries = 9, int $maxWaitMs = 30000)
     {
@@ -65,11 +82,12 @@ class CosmosDb
     }
 
     /**
-     * set a PSR-3 logger. every request is logged at debug level with its
-     * status, duration, request charge and activity id. retries are logged
+     * Set a PSR-3 logger. Every request is logged at debug level with its
+     * status, duration, request charge and activity id. Retries are logged
      * at warning level.
      *
      * @param LoggerInterface $logger
+     * @return void
      */
     public function setLogger(LoggerInterface $logger)
     {
@@ -77,7 +95,7 @@ class CosmosDb
     }
 
     /**
-     * the guzzle client is created once and reused, so requests share
+     * Get the Guzzle client. It's created once and reused, so requests share
      * pooled connections instead of opening a new one each time.
      *
      * @return Client
@@ -107,8 +125,9 @@ class CosmosDb
     }
 
     /**
-     * azure drops connections that sit idle for about 4 minutes. tcp keep-alive
-     * probes stop a pooled connection from going stale between requests.
+     * Get the cURL options that keep pooled connections alive. Azure drops
+     * connections that sit idle for about 4 minutes, and TCP keep-alive probes
+     * stop a pooled connection from going stale between requests.
      *
      * @return array
      */
@@ -130,14 +149,14 @@ class CosmosDb
     }
 
     /**
-     * getAuthHeaders
+     * Build the headers every request needs, including an authorization token
+     * signed with the account key.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn783368.aspx
-     * @access private
-     * @param string $verb Request Method (GET, POST, PUT, DELETE)
-     * @param string $resource_type Resource Type
-     * @param string $resource_id Resource ID
-     * @return array of Request Headers
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/access-control-on-cosmosdb-resources
+     * @param string $verb request method; ie: GET, POST, PUT, PATCH or DELETE
+     * @param string $resource_type resource type; ie: dbs, colls or docs. empty for the account itself
+     * @param string $resource_id _rid of the resource, or of its parent when creating, listing or querying. empty at the account level
+     * @return array request headers
      */
     private function getAuthHeaders(string $verb, string $resource_type, string $resource_id)
     {
@@ -166,19 +185,16 @@ class CosmosDb
     }
 
     /**
-     * request
+     * Send a request to Cosmos DB. A network error with no response, such as a
+     * pooled connection that went stale, is retried once. A 429 (rate limited)
+     * response is retried only if enabled with setRetryOptions().
      *
-     * a network error with no response, such as a pooled connection that went
-     * stale, is retried once. a 429 (rate limited) response is retried only if
-     * enabled with setRetryOptions().
-     *
-     * @access private
-     * @param string $path request path
+     * @param string $path request path, relative to the host
      * @param string $method request method
      * @param array $headers request headers
-     * @param string|null $body request body (JSON or QUERY)
+     * @param string|null $body request body
      * @param bool $retryNetworkErrors false for requests that aren't safe to send twice
-     * @return ResponseInterface JSON response
+     * @return ResponseInterface
      * @throws GuzzleException
      */
     private function request(string $path, string $method, array $headers, $body = null, bool $retryNetworkErrors = true)
@@ -266,8 +282,9 @@ class CosmosDb
     }
 
     /**
-     * how long to wait before retrying a 429 (rate limited) response, using the
-     * x-ms-retry-after-ms header. null if it isn't a 429 or the retry limits are reached.
+     * Get how long to wait before retrying a 429 (rate limited) response, using
+     * the x-ms-retry-after-ms header. Returns null if it isn't a 429, or if the
+     * retry limits are reached.
      *
      * @param ResponseInterface $response
      * @param int $retries retries made so far
@@ -289,7 +306,7 @@ class CosmosDb
     }
 
     /**
-     * read a response body without consuming it, so it can still be read afterwards
+     * Read a response body without consuming it, so it can still be read afterwards.
      *
      * @param ResponseInterface $response
      * @return string
@@ -305,7 +322,7 @@ class CosmosDb
     }
 
     /**
-     * decode the error body of a 4xx response
+     * Decode the error body of a 4xx response.
      *
      * @param ClientException $e
      * @return object|null
@@ -316,13 +333,14 @@ class CosmosDb
     }
 
     /**
-     * log one request attempt at debug level
+     * Log one request attempt at debug level.
      *
      * @param string $method
      * @param string $path
      * @param float $start microtime the attempt started
      * @param ResponseInterface|null $response
      * @param \Exception|null $error
+     * @return void
      */
     private function logRequest(string $method, string $path, float $start, $response, $error)
     {
@@ -348,9 +366,12 @@ class CosmosDb
     }
 
     /**
+     * Log a message, if a logger has been set.
+     *
      * @param string $level PSR-3 log level
      * @param string $message
      * @param array $context
+     * @return void
      */
     private function log(string $level, string $message, array $context = [])
     {
@@ -360,8 +381,8 @@ class CosmosDb
     }
 
     /**
-     * format a partition key value for the x-ms-documentdb-partitionkey header.
-     * json encoding keeps numbers and booleans typed, and escapes quotes in strings.
+     * Format a partition key value for the x-ms-documentdb-partitionkey header.
+     * JSON encoding keeps numbers and booleans typed, and escapes quotes in strings.
      *
      * @param mixed $value
      * @return string
@@ -372,11 +393,10 @@ class CosmosDb
     }
 
     /**
-     * selectDB
+     * Select a database by name, creating it if it doesn't exist.
      *
-     * @access public
-     * @param string $db_name Database name
-     * @return ?CosmosDbDatabase class
+     * @param string $db_name database name
+     * @return CosmosDbDatabase|null
      * @throws GuzzleException
      */
     public function selectDB(string $db_name)
@@ -399,9 +419,8 @@ class CosmosDb
     }
 
     /**
-     * getInfo
+     * Get the account's details, such as its regions and consistency policy.
      *
-     * @access public
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -413,16 +432,17 @@ class CosmosDb
     }
 
     /**
-     * query
+     * Run a query against a collection and return every page of results. A
+     * cross-partition query the gateway can't serve is run against each
+     * partition key range instead.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn783363.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $query Query
-     * @param boolean $isCrossPartition used for cross partition query
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/query-documents
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $query JSON query body; ie: {"query": "SELECT * FROM c", "parameters": []}
+     * @param bool $isCrossPartition query across partitions
      * @param mixed $partitionValue partition key value, to query a single partition
-     * @return array JSON response
+     * @return string[] JSON response for each page
      * @throws GuzzleException
      */
     public function query(string $rid_id, string $rid_col, string $query, bool $isCrossPartition = false, $partitionValue = null)
@@ -482,14 +502,14 @@ class CosmosDb
     }
 
     /**
-     * run a query against each partition key range in turn. the results of each
+     * Run a query against each partition key range in turn. The results of each
      * range are separate, so an ORDER BY or TOP applies within each range only.
      *
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $query Query
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $query JSON query body
      * @param array $headers request headers
-     * @return array JSON response
+     * @return string[] JSON response for each page
      * @throws GuzzleException
      */
     private function queryEachPkRange(string $rid_id, string $rid_col, string $query, array $headers)
@@ -519,15 +539,13 @@ class CosmosDb
     }
 
     /**
-     * getQueryResults
+     * Run a query and return every page of results.
      *
-     * run a query and return every page of results
-     *
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $query Query
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $query JSON query body
      * @param array $headers request headers
-     * @return array JSON response for each page
+     * @return string[] JSON response for each page
      * @throws GuzzleException
      */
     private function getQueryResults(string $rid_id, string $rid_col, string $query, array $headers)
@@ -555,13 +573,12 @@ class CosmosDb
     }
 
     /**
-     * getPkRanges
+     * Get a collection's partition key ranges. They're cached for the life of this object.
      *
-     * the ranges are cached for the life of this object
-     *
-     * @param string $rid_id
-     * @param string $rid_col
-     * @return mixed
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-partition-key-ranges
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @return object decoded response, with the ranges in PartitionKeyRanges
      * @throws GuzzleException
      */
     public function getPkRanges(string $rid_id, string $rid_col)
@@ -578,11 +595,11 @@ class CosmosDb
     }
 
     /**
-     * getPkFullRange
+     * Get the collection _rid followed by the id of each partition key range,
+     * comma separated, such as z6odAJjXSto=,0,1.
      *
-     * @param $rid_id
-     * @param $rid_col
-     *
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
      * @return string
      * @throws GuzzleException
      */
@@ -594,10 +611,9 @@ class CosmosDb
 	}
 
     /**
-     * listDatabases
+     * List the databases in the account.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803945.aspx
-     * @access public
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-databases
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -609,11 +625,10 @@ class CosmosDb
     }
 
     /**
-     * getDatabase
+     * Get a database.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803937.aspx
-     * @access public
-     * @param string $rid_id Resource ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-database
+     * @param string $rid_id database _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -625,11 +640,10 @@ class CosmosDb
     }
 
     /**
-     * createDatabase
+     * Create a database.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803954.aspx
-     * @access public
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-database
+     * @param string $json database definition; ie: {"id": "mydb"}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -641,12 +655,10 @@ class CosmosDb
     }
 
     /**
-     * replaceDatabase
+     * Replace a database.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803943.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $json JSON request
+     * @param string $rid_id database _rid
+     * @param string $json new database definition
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -658,12 +670,12 @@ class CosmosDb
     }
 
     /**
-     * deleteDatabase
+     * Delete a database, and everything in it.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803942.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-database
+     * @param string $rid_id database _rid
+     * @return string empty on success
+     * @throws GuzzleException
      */
     public function deleteDatabase(string $rid_id)
     {
@@ -673,11 +685,10 @@ class CosmosDb
     }
 
     /**
-     * listUsers
+     * List the users in a database.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803958.aspx
-     * @access public
-     * @param string $rid_id Resource ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-users
+     * @param string $rid_id database _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -689,12 +700,11 @@ class CosmosDb
     }
 
     /**
-     * getUser
+     * Get a user.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803949.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-user
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -706,12 +716,11 @@ class CosmosDb
     }
 
     /**
-     * createUser
+     * Create a user in a database.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803946.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-user
+     * @param string $rid_id database _rid
+     * @param string $json user definition; ie: {"id": "someone"}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -723,13 +732,12 @@ class CosmosDb
     }
 
     /**
-     * replaceUser
+     * Replace a user.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803941.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-user
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
+     * @param string $json new user definition
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -741,13 +749,12 @@ class CosmosDb
     }
 
     /**
-     * deleteUser
+     * Delete a user.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803953.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-user
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
+     * @return string empty on success
      * @throws GuzzleException
      */
     public function deleteUser(string $rid_id, string $rid_user)
@@ -758,11 +765,10 @@ class CosmosDb
     }
 
     /**
-     * listCollections
+     * List the collections in a database.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803935.aspx
-     * @access public
-     * @param string $rid_id Resource ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-collections
+     * @param string $rid_id database _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -774,12 +780,11 @@ class CosmosDb
     }
 
     /**
-     * getCollection
+     * Get a collection.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803951.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-collection
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -791,12 +796,11 @@ class CosmosDb
     }
 
     /**
-     * createCollection
+     * Create a collection in a database.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803934.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-collection
+     * @param string $rid_id database _rid
+     * @param string $json collection definition; ie: {"id": "Users", "partitionKey": {"paths": ["/country"], "kind": "Hash"}}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -808,13 +812,12 @@ class CosmosDb
     }
 
     /**
-     * deleteCollection
+     * Delete a collection, and every document in it.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803953.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-collection
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @return string empty on success
      * @throws GuzzleException
      */
     public function deleteCollection(string $rid_id, string $rid_col)
@@ -825,12 +828,11 @@ class CosmosDb
     }
 
     /**
-     * listDocuments
+     * List the documents in a collection. Only the first page of results is returned.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803955.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-documents
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -842,13 +844,12 @@ class CosmosDb
     }
 
     /**
-     * getDocument
+     * Get a document.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803957.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-document
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -860,15 +861,14 @@ class CosmosDb
     }
 
     /**
-     * createDocument
+     * Create a document in a collection.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803948.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-document
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $json the document as JSON
      * @param mixed $partitionKey partition key value
-     * @param array $headers Optional headers to send along with the request
+     * @param array $headers extra headers to send with the request
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -885,16 +885,15 @@ class CosmosDb
     }
 
     /**
-     * replaceDocument
+     * Replace a document.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803947.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-document
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
+     * @param string $json the new document as JSON
      * @param mixed $partitionKey partition key value
-     * @param array $headers Optional headers to send along with the request
+     * @param array $headers extra headers to send with the request
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -911,19 +910,16 @@ class CosmosDb
     }
 
     /**
-     * patchDocument
-     *
-     * not retried on a network error, because operations such as incr
-     * aren't safe to apply twice
+     * Partially update a document. It isn't retried on a network error, because
+     * operations such as incr aren't safe to apply twice.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/patch-a-document
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
-     * @param string $json JSON request; ie: {"operations": [...]}
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
+     * @param string $json patch request; ie: {"operations": [...]}
      * @param mixed $partitionKey partition key value
-     * @param array $headers Optional headers to send along with the request
+     * @param array $headers extra headers to send with the request
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -941,16 +937,15 @@ class CosmosDb
     }
 
     /**
-     * deleteDocument
+     * Delete a document.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803952.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-document
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
      * @param mixed $partitionKey partition key value
-     * @param array $headers Optional headers to send along with the request
-     * @return string JSON response
+     * @param array $headers extra headers to send with the request
+     * @return string empty on success
      * @throws GuzzleException
      */
     public function deleteDocument(string $rid_id, string $rid_col, string $rid_doc, $partitionKey = null, array $headers = [])
@@ -966,13 +961,12 @@ class CosmosDb
     }
 
     /**
-     * listAttachments
+     * List a document's attachments.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col
-     * @param string $rid_doc Resource Doc ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-attachments
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -984,14 +978,13 @@ class CosmosDb
     }
 
     /**
-     * getAttachment
+     * Get an attachment.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
-     * @param string $rid_at Resource Attachment ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/attachments
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
+     * @param string $rid_at attachment _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1003,16 +996,15 @@ class CosmosDb
     }
 
     /**
-     * createAttachment
+     * Create an attachment by uploading raw media to a document.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803933.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
-     * @param string $content_type Content-Type of Media
-     * @param string $filename Attachement file name
-     * @param string $file URL encoded Attachement file (Raw Media)
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-an-attachment
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
+     * @param string $content_type media type; ie: image/png
+     * @param string $filename file name, sent in the Slug header
+     * @param string $file raw media
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1026,17 +1018,16 @@ class CosmosDb
     }
 
     /**
-     * replaceAttachment
+     * Replace an attachment.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
-     * @param string $rid_at Resource Attachment ID
-     * @param string $content_type Content-Type of Media
-     * @param string $filename Attachement file name
-     * @param string $file URL encoded Attachement file (Raw Media)
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-an-attachment
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
+     * @param string $rid_at attachment _rid
+     * @param string $content_type media type; ie: image/png
+     * @param string $filename file name, sent in the Slug header
+     * @param string $file raw media
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1050,15 +1041,14 @@ class CosmosDb
     }
 
     /**
-     * deleteAttachment
+     * Delete an attachment.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_doc Resource Doc ID
-     * @param string $rid_at Resource Attachment ID
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-attachments
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_doc document _rid
+     * @param string $rid_at attachment _rid
+     * @return string empty on success
      * @throws GuzzleException
      */
     public function deleteAttachment(string $rid_id, string $rid_col, string $rid_doc, string $rid_at)
@@ -1069,10 +1059,10 @@ class CosmosDb
     }
 
     /**
-     * listOffers
+     * List the offers in the account. An offer holds the provisioned throughput
+     * of a database or collection.
      *
-     * @link http://
-     * @access public
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-offers
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1084,11 +1074,10 @@ class CosmosDb
     }
 
     /**
-     * getOffer
+     * Get an offer.
      *
-     * @link http://
-     * @access public
-     * @param string $rid Resource ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-an-offer
+     * @param string $rid offer _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1100,12 +1089,11 @@ class CosmosDb
     }
 
     /**
-     * replaceOffer
+     * Replace an offer, for example to change a collection's throughput.
      *
-     * @link http://
-     * @access public
-     * @param string $rid Resource ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-an-offer
+     * @param string $rid offer _rid
+     * @param string $json new offer definition
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1117,11 +1105,10 @@ class CosmosDb
     }
 
     /**
-     * queryingOffers
+     * Query the offers in the account.
      *
-     * @link http://
-     * @access public
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/querying-offers
+     * @param string $json JSON query body; ie: {"query": "SELECT * FROM root", "parameters": []}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1135,12 +1122,11 @@ class CosmosDb
     }
 
     /**
-     * listPermissions
+     * List a user's permissions.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803949.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-permissions
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1152,13 +1138,12 @@ class CosmosDb
     }
 
     /**
-     * createPermission
+     * Create a permission for a user.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803946.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-permission
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
+     * @param string $json permission definition; ie: {"id": "...", "permissionMode": "Read", "resource": "..."}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1170,13 +1155,12 @@ class CosmosDb
     }
 
     /**
-     * getPermission
+     * Get a permission.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803949.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
-     * @param string $rid_permission Resource Permission ID
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-permission
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
+     * @param string $rid_permission permission _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1188,14 +1172,13 @@ class CosmosDb
     }
 
     /**
-     * replacePermission
+     * Replace a permission.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803949.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
-     * @param string $rid_permission Resource Permission ID
-     * @param string $json JSON request
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-permission
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
+     * @param string $rid_permission permission _rid
+     * @param string $json new permission definition
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1207,14 +1190,13 @@ class CosmosDb
     }
 
     /**
-     * deletePermission
+     * Delete a permission.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803949.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_user Resource User ID
-     * @param string $rid_permission Resource Permission ID
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-permission
+     * @param string $rid_id database _rid
+     * @param string $rid_user user _rid
+     * @param string $rid_permission permission _rid
+     * @return string empty on success
      * @throws GuzzleException
      */
     public function deletePermission(string $rid_id, string $rid_user, string $rid_permission)
@@ -1225,12 +1207,11 @@ class CosmosDb
     }
 
     /**
-     * listStoredProcedures
+     * List the stored procedures in a collection.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-stored-procedures
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1242,17 +1223,14 @@ class CosmosDb
     }
 
     /**
-     * executeStoredProcedure
+     * Run a stored procedure. It isn't retried on a network error, because a
+     * stored procedure isn't necessarily safe to run twice.
      *
-     * not retried on a network error, because a stored procedure
-     * isn't necessarily safe to run twice
-     *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_sproc Resource ID of Stored Procedurea
-     * @param string $json Parameters
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/execute-a-stored-procedure
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_sproc stored procedure _rid
+     * @param string $json input parameters, as a JSON array; ie: ["Canada", 30]
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1264,13 +1242,12 @@ class CosmosDb
     }
 
     /**
-     * createStoredProcedure
+     * Create a stored procedure in a collection.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803933.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $json JSON of function
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-stored-procedure
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $json stored procedure definition; ie: {"id": "...", "body": "function () { ... }"}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1282,14 +1259,13 @@ class CosmosDb
     }
 
     /**
-     * replaceStoredProcedure
+     * Replace a stored procedure.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_sproc Resource ID of Stored Procedurea
-     * @param string $json Parameters
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-stored-procedure
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_sproc stored procedure _rid
+     * @param string $json new stored procedure definition
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1301,15 +1277,15 @@ class CosmosDb
     }
 
     /**
-     * deleteStoredProcedure (MethodNotAllowed: MUST FIX)
+     * Delete a stored procedure.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_sproc Resource ID of Stored Procedurea
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-stored-procedure
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_sproc stored procedure _rid
+     * @return string empty on success
      * @throws GuzzleException
+     * @todo check whether this still fails with 405 (MethodNotAllowed)
      */
     public function deleteStoredProcedure(string $rid_id, string $rid_col, string $rid_sproc)
     {
@@ -1319,12 +1295,11 @@ class CosmosDb
     }
 
     /**
-     * listUserDefinedFunctions
+     * List the user-defined functions in a collection.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-user-defined-functions
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1336,13 +1311,12 @@ class CosmosDb
     }
 
     /**
-     * createUserDefinedFunction
+     * Create a user-defined function in a collection.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803933.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $json JSON of function
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-user-defined-function
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $json function definition; ie: {"id": "...", "body": "function () { ... }"}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1354,14 +1328,13 @@ class CosmosDb
     }
 
     /**
-     * replaceUserDefinedFunction
+     * Replace a user-defined function.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_udf Resource ID of User Defined Function
-     * @param string $json Parameters
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-user-defined-function
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_udf user-defined function _rid
+     * @param string $json new function definition
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1373,14 +1346,13 @@ class CosmosDb
     }
 
     /**
-     * deleteUserDefinedFunction
+     * Delete a user-defined function.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_udf Resource ID of User Defined Function
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-user-defined-function
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_udf user-defined function _rid
+     * @return string empty on success
      * @throws GuzzleException
      */
     public function deleteUserDefinedFunction(string $rid_id, string $rid_col, string $rid_udf)
@@ -1391,12 +1363,11 @@ class CosmosDb
     }
 
     /**
-     * listTriggers
+     * List the triggers in a collection.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-triggers
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1408,13 +1379,12 @@ class CosmosDb
     }
 
     /**
-     * createTrigger
+     * Create a trigger in a collection.
      *
-     * @link http://msdn.microsoft.com/en-us/library/azure/dn803933.aspx
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $json JSON of function
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-trigger
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $json trigger definition; ie: {"id": "...", "body": "function () { ... }", "triggerType": "Pre", "triggerOperation": "All"}
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1426,14 +1396,13 @@ class CosmosDb
     }
 
     /**
-     * replaceTrigger
+     * Replace a trigger.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_trigger Resource ID of Trigger
-     * @param string $json Parameters
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-trigger
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_trigger trigger _rid
+     * @param string $json new trigger definition
      * @return string JSON response
      * @throws GuzzleException
      */
@@ -1445,14 +1414,13 @@ class CosmosDb
     }
 
     /**
-     * deleteTrigger
+     * Delete a trigger.
      *
-     * @link http://
-     * @access public
-     * @param string $rid_id Resource ID
-     * @param string $rid_col Resource Collection ID
-     * @param string $rid_trigger Resource ID of Trigger
-     * @return string JSON response
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-trigger
+     * @param string $rid_id database _rid
+     * @param string $rid_col collection _rid
+     * @param string $rid_trigger trigger _rid
+     * @return string empty on success
      * @throws GuzzleException
      */
     public function deleteTrigger(string $rid_id, string $rid_col, string $rid_trigger)
