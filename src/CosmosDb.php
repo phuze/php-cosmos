@@ -172,6 +172,9 @@ class CosmosDb
             $date . "\n" .
             "\n";
 
+        # every request addresses its resource by _rid, and a _rid is signed
+        # lowercased, so the whole string can be. a name-based link, such as
+        # dbs/MyDb, would have to keep its case
         $sig = base64_encode(hash_hmac('sha256', strtolower($stringToSign), $key, true));
 
         return [
