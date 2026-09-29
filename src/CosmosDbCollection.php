@@ -29,6 +29,27 @@ class CosmosDbCollection
     }
 
     /**
+     * Get the _rid of this collection's database. Keep it with getCollRid()
+     * to create this collection later without looking it up again.
+     *
+     * @return string
+     */
+    public function getDbRid()
+    {
+        return $this->dbRid;
+    }
+
+    /**
+     * Get this collection's _rid.
+     *
+     * @return string
+     */
+    public function getCollRid()
+    {
+        return $this->collRid;
+    }
+
+    /**
      * Run a query against this collection and return every page of results.
      *
      * @param string $query SQL query; ie: SELECT * FROM c WHERE c.age > @age

@@ -18,6 +18,24 @@ $collection = $database->selectCollection('Users', '/country');
 
 A `CosmosDb` object creates one Guzzle client and reuses its connections for every request, so create it once and share it (for example, for the life of a worker process). `CosmosDbDatabase` and `CosmosDbCollection` objects share the connection of the `CosmosDb` they came from.
 
+## Skipping the Lookups
+
+`selectDB()` and `selectCollection()` each send a request to look up the database or collection's `_rid`. A PHP web app usually keeps nothing between page loads, so both lookups run on every one. To skip them, keep the `_rid`s and create the collection directly:
+
+```php
+use Phuze\PhpCosmos\CosmosDbCollection;
+
+# Look them up once, then store both, e.g. in your config or a cache.
+$collection = $conn->selectDB('databaseName')->selectCollection('Users', '/country');
+$dbRid = $collection->getDbRid();
+$collRid = $collection->getCollRid();
+
+# Later, create the collection without any lookups.
+$collection = new CosmosDbCollection($conn, $dbRid, $collRid);
+```
+
+A database or collection that's deleted and recreated gets a new `_rid`, and requests with the old one fail, so look them up again if that happens.
+
 ## Timeouts and Client Options
 
 Requests time out after 60 seconds, or after 5 seconds when connecting. To change either, or to set any other [Guzzle request option](https://docs.guzzlephp.org/en/stable/request-options.html), use `setHttpClientOptions()`:
