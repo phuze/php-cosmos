@@ -20,7 +20,7 @@ A `CosmosDb` object creates one Guzzle client and reuses its connections for eve
 
 ## Skipping the Lookups
 
-`selectDB()` and `selectCollection()` each send a request to look up the database or collection's `_rid`. A PHP web app usually keeps nothing between page loads, so both lookups run on every one. To skip them, keep the `_rid`s and create the collection directly:
+`selectDB()` and `selectCollection()` each send a request to look up the database or collection's `_rid`, every time they're called. To skip them, keep the `_rid`s and create the collection directly:
 
 ```php
 use Phuze\PhpCosmos\CosmosDbCollection;
