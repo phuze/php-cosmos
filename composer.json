@@ -15,6 +15,9 @@
     "guzzlehttp/guzzle": "^6.0 || ^7.0 || ^8.0",
     "psr/log": "^1.0 || ^2.0 || ^3.0"
   },
+  "suggest": {
+    "monolog/monolog": "a PSR-3 logger implementation to pass to CosmosDb::setLogger()"
+  },
   "autoload": {
     "psr-4": {
       "Phuze\\PhpCosmos\\": "src/"
