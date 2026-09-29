@@ -6,25 +6,25 @@ A patch changes individual properties of a document without sending the whole do
 use Phuze\PhpCosmos\QueryBuilder;
 
 # John Doe's document is in the Canada partition.
-$qb = QueryBuilder::instance()
+$query = QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionValue('Canada');
 
-$rid = $qb->patch($rid, [
-    $qb->getPatchOpSet('/name', 'John Smith'),
-    $qb->getPatchOpIncrement('/age', 1),
-    $qb->getPatchOpAdd('/tags', ['vip']), # Adds a new tags property.
+$rid = $query->patch($rid, [
+    $query->getPatchOpSet('/name', 'John Smith'),
+    $query->getPatchOpIncrement('/age', 1),
+    $query->getPatchOpAdd('/tags', ['vip']), # Adds a new tags property.
 ]);
 
 # A conditional patch is only applied if the document matches where(). If it
 # doesn't, Cosmos DB responds with 412 Precondition Failed, thrown as a ClientException.
-$qb = QueryBuilder::instance()
+$query = QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionValue('Canada')
     ->where("c.age < 40");
 
-$rid = $qb->patch($rid, [
-    $qb->getPatchOpAdd('/tags/-', 'under-40'), # Appends to the tags array.
+$rid = $query->patch($rid, [
+    $query->getPatchOpAdd('/tags/-', 'under-40'), # Appends to the tags array.
 ]);
 ```
 

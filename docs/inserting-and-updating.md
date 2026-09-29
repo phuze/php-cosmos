@@ -14,7 +14,12 @@ use Phuze\PhpCosmos\QueryBuilder;
 $rid = QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('country')
-    ->save(['id' => '1', 'name' => 'John Doe', 'age' => 22, 'country' => 'Canada']);
+    ->save([
+        'id'      => '1',
+        'name'    => 'John Doe',
+        'age'     => 22,
+        'country' => 'Canada'
+    ]);
 
 # Insert a document into a collection with a nested partition key.
 # The key can be written as 'billing.country' or '/billing/country'.
@@ -24,8 +29,8 @@ $customerRid = QueryBuilder::instance()
     ->setCollection($customers)
     ->setPartitionKey('billing.country')
     ->save([
-        'id' => '2',
-        'name' => 'Jane Doe',
+        'id'      => '2',
+        'name'    => 'Jane Doe',
         'billing' => ['country' => 'Canada']
     ]);
 ```
@@ -41,7 +46,7 @@ $rid = QueryBuilder::instance()
     ->setCollection($collection)
     ->setPartitionKey('country')
     ->save([
-        '_rid'    => $rid, // John Doe's _rid, from the insert above
+        '_rid'    => $rid, # John Doe's _rid, from the insert above
         'id'      => '1',
         'name'    => 'John Doe',
         'age'     => 23,

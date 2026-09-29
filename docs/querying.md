@@ -11,7 +11,10 @@ $res = QueryBuilder::instance()
     ->setCollection($collection)
     ->select("c.id, c.name")
     ->where("c.age > @age and c.country = @country")
-    ->params(['@age' => 30, '@country' => 'Canada'])
+    ->params([
+        '@age'     => 30,
+        '@country' => 'Canada'
+    ])
     ->find(true)
     ->toArray();
 
@@ -43,7 +46,10 @@ $res = QueryBuilder::instance()
 $res = QueryBuilder::instance()
     ->setCollection($collection)
     ->where("c.active = @active and ARRAY_CONTAINS(@countries, c.country)")
-    ->params(['@active' => true, '@countries' => ['Canada', 'United States']])
+    ->params([
+        '@active'    => true,
+        '@countries' => ['Canada', 'Japan']
+    ])
     ->findAll(true)
     ->toArray();
 
