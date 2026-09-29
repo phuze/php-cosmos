@@ -11,7 +11,7 @@ use \Psr\Log\LoggerInterface;
 
 class CosmosDb
 {
-    const VERSION = '4.0.0';
+    const VERSION = '4.0.1';
 
     /** @var string */
     private $host;

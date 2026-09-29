@@ -67,6 +67,10 @@ See the [documentation](docs/README.md) for more examples:
 
 ## Changelog
 
+### v4.0.1
+- Renamed variables and some method parameters for clarity, using camelCase consistently
+- Cleaned up the doc blocks for a better IDE experience
+
 ### v4.0.0
 This release changes some existing behavior. See [Upgrading from v3](#upgrading-from-v3).
 
