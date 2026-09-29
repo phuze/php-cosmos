@@ -5,27 +5,27 @@ namespace Phuze\PhpCosmos;
 class CosmosDbCollection
 {
     /** @var CosmosDb */
-    private $document_db;
+    private $connection;
 
     /** @var string */
-    private $rid_db;
+    private $dbRid;
 
     /** @var string */
-    private $rid_col;
+    private $collRid;
 
     /**
      * Create a collection object. This is usually done by
      * CosmosDbDatabase::selectCollection().
      *
-     * @param CosmosDb $document_db connection to the account
-     * @param string $rid_db database _rid
-     * @param string $rid_col collection _rid
+     * @param CosmosDb $connection connection to the account
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      */
-    public function __construct(CosmosDb $document_db, string $rid_db, string $rid_col)
+    public function __construct(CosmosDb $connection, string $dbRid, string $collRid)
     {
-        $this->document_db = $document_db;
-        $this->rid_db = $rid_db;
-        $this->rid_col = $rid_col;
+        $this->connection = $connection;
+        $this->dbRid = $dbRid;
+        $this->collRid = $collRid;
     }
 
     /**
@@ -52,7 +52,7 @@ class CosmosDbCollection
             throw new \InvalidArgumentException('Unable to encode query as JSON: ' . json_last_error_msg());
         }
 
-        return $this->document_db->query($this->rid_db, $this->rid_col, $body, $isCrossPartition, $partitionValue);
+        return $this->connection->query($this->dbRid, $this->collRid, $body, $isCrossPartition, $partitionValue);
     }
 
 	/**
@@ -62,7 +62,7 @@ class CosmosDbCollection
 	 */
 	public function getPkRanges()
 	{
-		return $this->document_db->getPkRanges($this->rid_db, $this->rid_col);
+		return $this->connection->getPkRanges($this->dbRid, $this->collRid);
 	}
 
 	/**
@@ -73,87 +73,87 @@ class CosmosDbCollection
 	 */
 	public function getPkFullRange()
 	{
-		return $this->document_db->getPkFullRange($this->rid_db, $this->rid_col);
+		return $this->connection->getPkFullRange($this->dbRid, $this->collRid);
 	}
 
     /**
      * Create a document.
      *
      * @param string $json the document as JSON
-     * @param mixed $partitionKey partition key value
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string JSON response
      */
-    public function createDocument($json, $partitionKey = null, array $headers = [])
+    public function createDocument($json, $partitionValue = null, array $headers = [])
     {
-        return $this->document_db->createDocument($this->rid_db, $this->rid_col, $json, $partitionKey, $headers);
+        return $this->connection->createDocument($this->dbRid, $this->collRid, $json, $partitionValue, $headers);
     }
 
     /**
      * Replace a document.
      *
-     * @param string $rid document _rid
+     * @param string $docRid document _rid
      * @param string $json the new document as JSON
-     * @param mixed $partitionKey partition key value
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string JSON response
      */
-    public function replaceDocument($rid, $json, $partitionKey = null, array $headers = [])
+    public function replaceDocument($docRid, $json, $partitionValue = null, array $headers = [])
     {
-        return $this->document_db->replaceDocument($this->rid_db, $this->rid_col, $rid, $json, $partitionKey, $headers);
+        return $this->connection->replaceDocument($this->dbRid, $this->collRid, $docRid, $json, $partitionValue, $headers);
     }
 
     /**
      * Partially update a document.
      *
-     * @param string $rid document _rid
+     * @param string $docRid document _rid
      * @param string $json patch request; ie: {"operations": [...]}
-     * @param mixed $partitionKey partition key value
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string JSON response
      */
-    public function patchDocument($rid, $json, $partitionKey = null, array $headers = [])
+    public function patchDocument($docRid, $json, $partitionValue = null, array $headers = [])
     {
-        return $this->document_db->patchDocument($this->rid_db, $this->rid_col, $rid, $json, $partitionKey, $headers);
+        return $this->connection->patchDocument($this->dbRid, $this->collRid, $docRid, $json, $partitionValue, $headers);
     }
 
     /**
      * Delete a document.
      *
-     * @param string $rid document _rid
-     * @param mixed $partitionKey partition key value
+     * @param string $docRid document _rid
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string empty on success
      */
-    public function deleteDocument($rid, $partitionKey = null, array $headers = [])
+    public function deleteDocument($docRid, $partitionValue = null, array $headers = [])
     {
-        return $this->document_db->deleteDocument($this->rid_db, $this->rid_col, $rid, $partitionKey, $headers);
+        return $this->connection->deleteDocument($this->dbRid, $this->collRid, $docRid, $partitionValue, $headers);
     }
 
     /*
       public function createUser($json)
       {
-        return $this->document_db->createUser($this->rid_db, $json);
+        return $this->connection->createUser($this->dbRid, $json);
       }
 
       public function listUsers()
       {
-        return $this->document_db->listUsers($this->rid_db, $rid);
+        return $this->connection->listUsers($this->dbRid, $rid);
       }
 
       public function deletePermission($uid, $pid)
       {
-        return $this->document_db->deletePermission($this->rid_db, $uid, $pid);
+        return $this->connection->deletePermission($this->dbRid, $uid, $pid);
       }
 
       public function listPermissions($uid)
       {
-        return $this->document_db->listPermissions($this->rid_db, $uid);
+        return $this->connection->listPermissions($this->dbRid, $uid);
       }
 
       public function getPermission($uid, $pid)
       {
-        return $this->document_db->getPermission($this->rid_db, $uid, $pid);
+        return $this->connection->getPermission($this->dbRid, $uid, $pid);
       }
     */
     
@@ -164,19 +164,19 @@ class CosmosDbCollection
      */
     public function listStoredProcedures()
     {
-        return $this->document_db->listStoredProcedures($this->rid_db, $this->rid_col);
+        return $this->connection->listStoredProcedures($this->dbRid, $this->collRid);
     }
 
     /**
      * Run a stored procedure.
      *
-     * @param string $sproc_name stored procedure _rid
+     * @param string $sprocRid stored procedure _rid
      * @param string $json input parameters, as a JSON array; ie: ["Canada", 30]
      * @return string JSON response
      */
-    public function executeStoredProcedure($sproc_name, $json)
+    public function executeStoredProcedure($sprocRid, $json)
     {
-        return $this->document_db->executeStoredProcedure($this->rid_db, $this->rid_col, $sproc_name, $json);
+        return $this->connection->executeStoredProcedure($this->dbRid, $this->collRid, $sprocRid, $json);
     }
 
     /**
@@ -187,30 +187,30 @@ class CosmosDbCollection
      */
     public function createStoredProcedure($json)
     {
-        return $this->document_db->createStoredProcedure($this->rid_db, $this->rid_col, $json);
+        return $this->connection->createStoredProcedure($this->dbRid, $this->collRid, $json);
     }
 
     /**
      * Replace a stored procedure.
      *
-     * @param string $sproc_name stored procedure _rid
+     * @param string $sprocRid stored procedure _rid
      * @param string $json new stored procedure definition
      * @return string JSON response
      */
-    public function replaceStoredProcedure($sproc_name, $json)
+    public function replaceStoredProcedure($sprocRid, $json)
     {
-        return $this->document_db->replaceStoredProcedure($this->rid_db, $this->rid_col, $sproc_name, $json);
+        return $this->connection->replaceStoredProcedure($this->dbRid, $this->collRid, $sprocRid, $json);
     }
 
     /**
      * Delete a stored procedure.
      *
-     * @param string $sproc_name stored procedure _rid
+     * @param string $sprocRid stored procedure _rid
      * @return string empty on success
      */
-    public function deleteStoredProcedure($sproc_name)
+    public function deleteStoredProcedure($sprocRid)
     {
-        return $this->document_db->deleteStoredProcedure($this->rid_db, $this->rid_col, $sproc_name);
+        return $this->connection->deleteStoredProcedure($this->dbRid, $this->collRid, $sprocRid);
     }
 
     /**
@@ -220,7 +220,7 @@ class CosmosDbCollection
      */
     public function listUserDefinedFunctions()
     {
-        return $this->document_db->listUserDefinedFunctions($this->rid_db, $this->rid_col);
+        return $this->connection->listUserDefinedFunctions($this->dbRid, $this->collRid);
     }
 
     /**
@@ -231,30 +231,30 @@ class CosmosDbCollection
      */
     public function createUserDefinedFunction($json)
     {
-        return $this->document_db->createUserDefinedFunction($this->rid_db, $this->rid_col, $json);
+        return $this->connection->createUserDefinedFunction($this->dbRid, $this->collRid, $json);
     }
 
     /**
      * Replace a user-defined function.
      *
-     * @param string $udf user-defined function _rid
+     * @param string $udfRid user-defined function _rid
      * @param string $json new function definition
      * @return string JSON response
      */
-    public function replaceUserDefinedFunction($udf, $json)
+    public function replaceUserDefinedFunction($udfRid, $json)
     {
-        return $this->document_db->replaceUserDefinedFunction($this->rid_db, $this->rid_col, $udf, $json);
+        return $this->connection->replaceUserDefinedFunction($this->dbRid, $this->collRid, $udfRid, $json);
     }
 
     /**
      * Delete a user-defined function.
      *
-     * @param string $udf user-defined function _rid
+     * @param string $udfRid user-defined function _rid
      * @return string empty on success
      */
-    public function deleteUserDefinedFunction($udf)
+    public function deleteUserDefinedFunction($udfRid)
     {
-        return $this->document_db->deleteUserDefinedFunction($this->rid_db, $this->rid_col, $udf);
+        return $this->connection->deleteUserDefinedFunction($this->dbRid, $this->collRid, $udfRid);
     }
 
     /**
@@ -264,7 +264,7 @@ class CosmosDbCollection
      */
     public function listTriggers()
     {
-        return $this->document_db->listTriggers($this->rid_db, $this->rid_col);
+        return $this->connection->listTriggers($this->dbRid, $this->collRid);
     }
 
     /**
@@ -275,30 +275,30 @@ class CosmosDbCollection
      */
     public function createTrigger($json)
     {
-        return $this->document_db->createTrigger($this->rid_db, $this->rid_col, $json);
+        return $this->connection->createTrigger($this->dbRid, $this->collRid, $json);
     }
 
     /**
      * Replace a trigger.
      *
-     * @param string $trigger trigger _rid
+     * @param string $triggerRid trigger _rid
      * @param string $json new trigger definition
      * @return string JSON response
      */
-    public function replaceTrigger($trigger, $json)
+    public function replaceTrigger($triggerRid, $json)
     {
-        return $this->document_db->replaceTrigger($this->rid_db, $this->rid_col, $trigger, $json);
+        return $this->connection->replaceTrigger($this->dbRid, $this->collRid, $triggerRid, $json);
     }
 
     /**
      * Delete a trigger.
      *
-     * @param string $trigger trigger _rid
+     * @param string $triggerRid trigger _rid
      * @return string empty on success
      */
-    public function deleteTrigger($trigger)
+    public function deleteTrigger($triggerRid)
     {
-        return $this->document_db->deleteTrigger($this->rid_db, $this->rid_col, $trigger);
+        return $this->connection->deleteTrigger($this->dbRid, $this->collRid, $triggerRid);
     }
 
 }

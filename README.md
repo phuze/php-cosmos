@@ -139,11 +139,11 @@ Most apps only need to change `phuze/php-cosmos` to `^4.0` in `composer.json`. C
   ->whereStartsWith('c.name', "O'Brien")
   ```
 
-- **Subclasses:** to support numeric partition keys, `$partitionKey` in `createDocument()`, `replaceDocument()` and `deleteDocument()`, and `$document` in `findPartitionValue()`, no longer have a type. If you extend `CosmosDb` or `QueryBuilder` and override any of these, remove the type from your override too, or PHP will throw a fatal error:
+- **Subclasses:** to support numeric partition keys, `$partitionValue` (called `$partitionKey` in v3) in `createDocument()`, `replaceDocument()` and `deleteDocument()`, and `$document` in `findPartitionValue()`, no longer have a type. If you extend `CosmosDb` or `QueryBuilder` and override any of these, remove the type from your override too, or PHP will throw a fatal error:
 
   ```diff
   - public function createDocument(..., string $partitionKey = null, ...)
-  + public function createDocument(..., $partitionKey = null, ...)
+  + public function createDocument(..., $partitionValue = null, ...)
   ```
 
 - **Creating documents:** if the connection drops after Cosmos DB has saved a new document, the automatic retry fails with a 409 Conflict, so if you handle errors from `save()`, treat a 409 as "this document may already exist" rather than a plain failure

@@ -293,12 +293,12 @@ class QueryBuilder
      * Set the collection's partition key, which is used to find a document's
      * partition value when saving or deleting.
      *
-     * @param string $fieldName partition key path; ie: /country or customer.country
+     * @param string $partitionKey partition key path; ie: /country or customer.country
      * @return $this
      */
-    public function setPartitionKey($fieldName)
+    public function setPartitionKey($partitionKey)
     {
-        $this->partitionKey = $fieldName;
+        $this->partitionKey = $partitionKey;
 
         return $this;
     }
@@ -317,12 +317,12 @@ class QueryBuilder
      * Set the partition key value, so queries only search that partition. It's
      * also used by save(), patch() and delete(), ahead of any value in the document.
      *
-     * @param mixed $fieldName partition key value; ie: Canada
+     * @param mixed $partitionValue partition key value; ie: Canada
      * @return $this
      */
-    public function setPartitionValue($fieldName)
+    public function setPartitionValue($partitionValue)
     {
-        $this->partitionValue = $fieldName;
+        $this->partitionValue = $partitionValue;
 
         return $this;
     }
@@ -341,12 +341,12 @@ class QueryBuilder
      * Append to a stored query string, which getQueryString() returns. It isn't
      * used when running a query.
      *
-     * @param string $fieldName text to append
+     * @param string $queryString text to append
      * @return $this
      */
-    public function setQueryString(string $fieldName)
+    public function setQueryString(string $queryString)
     {
-        $this->queryString .= $fieldName;
+        $this->queryString .= $queryString;
         return $this;
     }
 
@@ -543,12 +543,12 @@ class QueryBuilder
      * been set, the patch only applies if the document matches it.
      *
      * @link https://learn.microsoft.com/en-us/azure/cosmos-db/partial-document-update
-     * @param string $rid_doc document _rid
+     * @param string $docRid document _rid
      * @param array $patchOps operations built with the getPatchOp*() methods, max 10 per request
      * @return string|null the patched document's _rid
      * @throws Exception
      */
-    public function patch(string $rid_doc, array $patchOps)
+    public function patch(string $docRid, array $patchOps)
     {
         if (count($patchOps) > 10) {
             # throw the error cosmos would return, rather than waste a request
@@ -561,7 +561,7 @@ class QueryBuilder
         }
         $updates['operations'] = array_values($patchOps);
 
-        $result = $this->collection->patchDocument($rid_doc, json_encode($updates), $this->partitionValue, $this->triggersAsHeaders("patch"));
+        $result = $this->collection->patchDocument($docRid, json_encode($updates), $this->partitionValue, $this->triggersAsHeaders("patch"));
         $resultObj = json_decode($result);
 
         if (isset($resultObj->code) && isset($resultObj->message)) {

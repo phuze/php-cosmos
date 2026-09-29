@@ -17,7 +17,7 @@ class CosmosDb
     private $host;
 
     /** @var string */
-    private $private_key;
+    private $privateKey;
 
     /** @var Client|null */
     private $httpClient = null;
@@ -42,12 +42,12 @@ class CosmosDb
 
     /**
      * @param string $host account endpoint; ie: https://myaccount.documents.azure.com
-     * @param string $private_key the account's primary or secondary key
+     * @param string $privateKey the account's primary or secondary key
      */
-    public function __construct(string $host, string $private_key)
+    public function __construct(string $host, string $privateKey)
     {
         $this->host = $host;
-        $this->private_key = $private_key;
+        $this->privateKey = $privateKey;
     }
 
     /**
@@ -154,33 +154,33 @@ class CosmosDb
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/access-control-on-cosmosdb-resources
      * @param string $verb request method; ie: GET, POST, PUT, PATCH or DELETE
-     * @param string $resource_type resource type; ie: dbs, colls or docs. empty for the account itself
-     * @param string $resource_id _rid of the resource, or of its parent when creating, listing or querying. empty at the account level
+     * @param string $resourceType resource type; ie: dbs, colls or docs. empty for the account itself
+     * @param string $resourceId _rid of the resource, or of its parent when creating, listing or querying. empty at the account level
      * @return array request headers
      */
-    private function getAuthHeaders(string $verb, string $resource_type, string $resource_id)
+    private function getAuthHeaders(string $verb, string $resourceType, string $resourceId)
     {
-        $x_ms_date = gmdate('D, d M Y H:i:s T', strtotime('+2 minutes'));
-        $master = 'master';
-        $token = '1.0';
-        $x_ms_version = '2018-12-31';
+        $date = gmdate('D, d M Y H:i:s T', strtotime('+2 minutes'));
+        $tokenType = 'master';
+        $tokenVersion = '1.0';
+        $apiVersion = '2018-12-31';
 
-        $key = base64_decode($this->private_key);
-        $string_to_sign = $verb . "\n" .
-            $resource_type . "\n" .
-            $resource_id . "\n" .
-            $x_ms_date . "\n" .
+        $key = base64_decode($this->privateKey);
+        $stringToSign = $verb . "\n" .
+            $resourceType . "\n" .
+            $resourceId . "\n" .
+            $date . "\n" .
             "\n";
 
-        $sig = base64_encode(hash_hmac('sha256', strtolower($string_to_sign), $key, true));
+        $sig = base64_encode(hash_hmac('sha256', strtolower($stringToSign), $key, true));
 
         return [
             'Accept' => 'application/json',
             'User-Agent' => 'cosmos.php.sdk/' . self::VERSION,
             'Cache-Control' => 'no-cache',
-            'x-ms-date' => $x_ms_date,
-            'x-ms-version' => $x_ms_version,
-            'authorization' => urlencode("type={$master}&ver={$token}&sig={$sig}")
+            'x-ms-date' => $date,
+            'x-ms-version' => $apiVersion,
+            'authorization' => urlencode("type={$tokenType}&ver={$tokenVersion}&sig={$sig}")
         ];
     }
 
@@ -395,27 +395,27 @@ class CosmosDb
     /**
      * Select a database by name, creating it if it doesn't exist.
      *
-     * @param string $db_name database name
+     * @param string $dbName database name
      * @return CosmosDbDatabase|null
      * @throws GuzzleException
      */
-    public function selectDB(string $db_name)
+    public function selectDB(string $dbName)
     {
-        $rid_db = false;
+        $dbRid = false;
         $object = json_decode($this->listDatabases());
 
-        $db_list = $object->Databases;
-        for ($i = 0; $i < count($db_list); $i++) {
-            if ($db_list[$i]->id === $db_name) {
-                $rid_db = $db_list[$i]->_rid;
+        $dbList = $object->Databases;
+        for ($i = 0; $i < count($dbList); $i++) {
+            if ($dbList[$i]->id === $dbName) {
+                $dbRid = $dbList[$i]->_rid;
             }
         }
-        if (!$rid_db) {
-            $object = json_decode($this->createDatabase(json_encode(['id' => $db_name])));
-            $rid_db = $object->_rid;
+        if (!$dbRid) {
+            $object = json_decode($this->createDatabase(json_encode(['id' => $dbName])));
+            $dbRid = $object->_rid;
         }
 
-        return $rid_db ? new CosmosDbDatabase($this, $rid_db) : null;
+        return $dbRid ? new CosmosDbDatabase($this, $dbRid) : null;
     }
 
     /**
@@ -437,17 +437,17 @@ class CosmosDb
      * partition key range instead.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/query-documents
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @param string $query JSON query body; ie: {"query": "SELECT * FROM c", "parameters": []}
      * @param bool $isCrossPartition query across partitions
      * @param mixed $partitionValue partition key value, to query a single partition
      * @return string[] JSON response for each page
      * @throws GuzzleException
      */
-    public function query(string $rid_id, string $rid_col, string $query, bool $isCrossPartition = false, $partitionValue = null)
+    public function query(string $dbRid, string $collRid, string $query, bool $isCrossPartition = false, $partitionValue = null)
     {
-        $headers = $this->getAuthHeaders('POST', 'docs', $rid_col);
+        $headers = $this->getAuthHeaders('POST', 'docs', $collRid);
         $headers['Content-Length'] = strlen($query);
         $headers['Content-Type'] = 'application/query+json';
         $headers['x-ms-max-item-count'] = -1;
@@ -468,7 +468,7 @@ class CosmosDb
         ]);
 
         try {
-            return $this->getQueryResults($rid_id, $rid_col, $query, $headers);
+            return $this->getQueryResults($dbRid, $collRid, $query, $headers);
         }
         catch (ClientException $e) {
             $responseError = $this->decodeError($e);
@@ -498,30 +498,30 @@ class CosmosDb
 
         $this->log('info', 'Cosmos DB cross partition query not served by the gateway, querying each partition key range');
 
-        return $this->queryEachPkRange($rid_id, $rid_col, $query, $headers);
+        return $this->queryEachPkRange($dbRid, $collRid, $query, $headers);
     }
 
     /**
      * Run a query against each partition key range in turn. The results of each
      * range are separate, so an ORDER BY or TOP applies within each range only.
      *
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @param string $query JSON query body
      * @param array $headers request headers
      * @return string[] JSON response for each page
      * @throws GuzzleException
      */
-    private function queryEachPkRange(string $rid_id, string $rid_col, string $query, array $headers)
+    private function queryEachPkRange(string $dbRid, string $collRid, string $query, array $headers)
     {
         $refreshed = false;
 
         while (true) {
             try {
                 $results = [];
-                foreach ($this->getPkRanges($rid_id, $rid_col)->PartitionKeyRanges as $range) {
+                foreach ($this->getPkRanges($dbRid, $collRid)->PartitionKeyRanges as $range) {
                     $headers['x-ms-documentdb-partitionkeyrangeid'] = $range->id;
-                    $results = array_merge($results, $this->getQueryResults($rid_id, $rid_col, $query, $headers));
+                    $results = array_merge($results, $this->getQueryResults($dbRid, $collRid, $query, $headers));
                 }
                 return $results;
             }
@@ -532,7 +532,7 @@ class CosmosDb
                     throw $e;
                 }
                 $refreshed = true;
-                unset($this->pkRanges[$rid_id][$rid_col]);
+                unset($this->pkRanges[$dbRid][$collRid]);
                 $this->log('info', 'Cosmos DB partition key ranges changed, refreshing');
             }
         }
@@ -541,14 +541,14 @@ class CosmosDb
     /**
      * Run a query and return every page of results.
      *
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @param string $query JSON query body
      * @param array $headers request headers
      * @return string[] JSON response for each page
      * @throws GuzzleException
      */
-    private function getQueryResults(string $rid_id, string $rid_col, string $query, array $headers)
+    private function getQueryResults(string $dbRid, string $collRid, string $query, array $headers)
     {
         /*
          * Fix for https://github.com/jupitern/cosmosdb/issues/21 (credits to https://github.com/ElvenSpellmaker).
@@ -563,7 +563,7 @@ class CosmosDb
          */
         $results = [];
         do {
-            $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $query);
+            $result = $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs", "POST", $headers, $query);
             $results[] = $result->getBody()->getContents();
             $continuation = $result->getHeaderLine('x-ms-continuation');
             $headers['x-ms-continuation'] = $continuation;
@@ -576,36 +576,36 @@ class CosmosDb
      * Get a collection's partition key ranges. They're cached for the life of this object.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-partition-key-ranges
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return object decoded response, with the ranges in PartitionKeyRanges
      * @throws GuzzleException
      */
-    public function getPkRanges(string $rid_id, string $rid_col)
+    public function getPkRanges(string $dbRid, string $collRid)
     {
-        if (!isset($this->pkRanges[$rid_id][$rid_col])) {
-            $headers = $this->getAuthHeaders('GET', 'pkranges', $rid_col);
+        if (!isset($this->pkRanges[$dbRid][$collRid])) {
+            $headers = $this->getAuthHeaders('GET', 'pkranges', $collRid);
             $headers['Accept'] = 'application/json';
             $headers['x-ms-max-item-count'] = -1;
-            $result = $this->request("/dbs/{$rid_id}/colls/{$rid_col}/pkranges", "GET", $headers);
-            $this->pkRanges[$rid_id][$rid_col] = json_decode($result->getBody()->getContents());
+            $result = $this->request("/dbs/{$dbRid}/colls/{$collRid}/pkranges", "GET", $headers);
+            $this->pkRanges[$dbRid][$collRid] = json_decode($result->getBody()->getContents());
         }
 
-        return $this->pkRanges[$rid_id][$rid_col];
+        return $this->pkRanges[$dbRid][$collRid];
     }
 
     /**
      * Get the collection _rid followed by the id of each partition key range,
      * comma separated, such as z6odAJjXSto=,0,1.
      *
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return string
      * @throws GuzzleException
      */
-	public function getPkFullRange($rid_id, $rid_col)
+	public function getPkFullRange($dbRid, $collRid)
     {
-		$result = $this->getPkRanges($rid_id, $rid_col);
+		$result = $this->getPkRanges($dbRid, $collRid);
 		$ids = array_column($result->PartitionKeyRanges, "id");
 		return $result->_rid . "," . implode(",", $ids);
 	}
@@ -628,15 +628,15 @@ class CosmosDb
      * Get a database.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-database
-     * @param string $rid_id database _rid
+     * @param string $dbRid database _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getDatabase(string $rid_id)
+    public function getDatabase(string $dbRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'dbs', $rid_id);
+        $headers = $this->getAuthHeaders('GET', 'dbs', $dbRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -657,256 +657,256 @@ class CosmosDb
     /**
      * Replace a database.
      *
-     * @param string $rid_id database _rid
+     * @param string $dbRid database _rid
      * @param string $json new database definition
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceDatabase(string $rid_id, string $json)
+    public function replaceDatabase(string $dbRid, string $json)
     {
-        $headers = $this->getAuthHeaders('PUT', 'dbs', $rid_id);
+        $headers = $this->getAuthHeaders('PUT', 'dbs', $dbRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Delete a database, and everything in it.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-database
-     * @param string $rid_id database _rid
+     * @param string $dbRid database _rid
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deleteDatabase(string $rid_id)
+    public function deleteDatabase(string $dbRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'dbs', $rid_id);
+        $headers = $this->getAuthHeaders('DELETE', 'dbs', $dbRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
      * List the users in a database.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-users
-     * @param string $rid_id database _rid
+     * @param string $dbRid database _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listUsers(string $rid_id)
+    public function listUsers(string $dbRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'users', $rid_id);
+        $headers = $this->getAuthHeaders('GET', 'users', $dbRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Get a user.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-user
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getUser(string $rid_id, string $rid_user)
+    public function getUser(string $dbRid, string $userRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'users', $rid_user);
+        $headers = $this->getAuthHeaders('GET', 'users', $userRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Create a user in a database.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-user
-     * @param string $rid_id database _rid
+     * @param string $dbRid database _rid
      * @param string $json user definition; ie: {"id": "someone"}
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createUser(string $rid_id, string $json)
+    public function createUser(string $dbRid, string $json)
     {
-        $headers = $this->getAuthHeaders('POST', 'users', $rid_id);
+        $headers = $this->getAuthHeaders('POST', 'users', $dbRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Replace a user.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-user
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
      * @param string $json new user definition
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceUser(string $rid_id, string $rid_user, string $json)
+    public function replaceUser(string $dbRid, string $userRid, string $json)
     {
-        $headers = $this->getAuthHeaders('PUT', 'users', $rid_user);
+        $headers = $this->getAuthHeaders('PUT', 'users', $userRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Delete a user.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-user
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deleteUser(string $rid_id, string $rid_user)
+    public function deleteUser(string $dbRid, string $userRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'users', $rid_user);
+        $headers = $this->getAuthHeaders('DELETE', 'users', $userRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
      * List the collections in a database.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-collections
-     * @param string $rid_id database _rid
+     * @param string $dbRid database _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listCollections(string $rid_id)
+    public function listCollections(string $dbRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'colls', $rid_id);
+        $headers = $this->getAuthHeaders('GET', 'colls', $dbRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Get a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-collection
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getCollection(string $rid_id, string $rid_col)
+    public function getCollection(string $dbRid, string $collRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'colls', $rid_col);
+        $headers = $this->getAuthHeaders('GET', 'colls', $collRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Create a collection in a database.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-collection
-     * @param string $rid_id database _rid
+     * @param string $dbRid database _rid
      * @param string $json collection definition; ie: {"id": "Users", "partitionKey": {"paths": ["/country"], "kind": "Hash"}}
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createCollection(string $rid_id, string $json)
+    public function createCollection(string $dbRid, string $json)
     {
-        $headers = $this->getAuthHeaders('POST', 'colls', $rid_id);
+        $headers = $this->getAuthHeaders('POST', 'colls', $dbRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Delete a collection, and every document in it.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-collection
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deleteCollection(string $rid_id, string $rid_col)
+    public function deleteCollection(string $dbRid, string $collRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'colls', $rid_col);
+        $headers = $this->getAuthHeaders('DELETE', 'colls', $collRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
      * List the documents in a collection. Only the first page of results is returned.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-documents
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listDocuments(string $rid_id, string $rid_col)
+    public function listDocuments(string $dbRid, string $collRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'docs', $rid_col);
+        $headers = $this->getAuthHeaders('GET', 'docs', $collRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Get a document.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-document
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getDocument(string $rid_id, string $rid_col, string $rid_doc)
+    public function getDocument(string $dbRid, string $collRid, string $docRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'docs', $rid_doc);
+        $headers = $this->getAuthHeaders('GET', 'docs', $docRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Create a document in a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-document
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @param string $json the document as JSON
-     * @param mixed $partitionKey partition key value
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createDocument(string $rid_id, string $rid_col, string $json, $partitionKey = null, array $headers = [])
+    public function createDocument(string $dbRid, string $collRid, string $json, $partitionValue = null, array $headers = [])
     {
-        $authHeaders = $this->getAuthHeaders('POST', 'docs', $rid_col);
+        $authHeaders = $this->getAuthHeaders('POST', 'docs', $collRid);
         $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = strlen($json);
-        if ($partitionKey !== null) {
-            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
+        if ($partitionValue !== null) {
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
         }
 
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Replace a document.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-document
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
      * @param string $json the new document as JSON
-     * @param mixed $partitionKey partition key value
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceDocument(string $rid_id, string $rid_col, string $rid_doc, string $json, $partitionKey = null, array $headers = [])
+    public function replaceDocument(string $dbRid, string $collRid, string $docRid, string $json, $partitionValue = null, array $headers = [])
     {
-        $authHeaders = $this->getAuthHeaders('PUT', 'docs', $rid_doc);
+        $authHeaders = $this->getAuthHeaders('PUT', 'docs', $docRid);
         $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = strlen($json);
-        if ($partitionKey !== null) {
-            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
+        if ($partitionValue !== null) {
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
         }
 
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -914,148 +914,148 @@ class CosmosDb
      * operations such as incr aren't safe to apply twice.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/patch-a-document
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
      * @param string $json patch request; ie: {"operations": [...]}
-     * @param mixed $partitionKey partition key value
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function patchDocument(string $rid_id, string $rid_col, string $rid_doc, string $json, $partitionKey = null, array $headers = [])
+    public function patchDocument(string $dbRid, string $collRid, string $docRid, string $json, $partitionValue = null, array $headers = [])
     {
-        $authHeaders = $this->getAuthHeaders('PATCH', 'docs', $rid_doc);
+        $authHeaders = $this->getAuthHeaders('PATCH', 'docs', $docRid);
         $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = strlen($json);
         $headers['Content-Type'] = 'application/json_patch+json';
-        if ($partitionKey !== null) {
-            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
+        if ($partitionValue !== null) {
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
         }
 
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "PATCH", $headers, $json, false)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}", "PATCH", $headers, $json, false)->getBody()->getContents();
     }
 
     /**
      * Delete a document.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-document
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
-     * @param mixed $partitionKey partition key value
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
+     * @param mixed $partitionValue partition key value
      * @param array $headers extra headers to send with the request
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deleteDocument(string $rid_id, string $rid_col, string $rid_doc, $partitionKey = null, array $headers = [])
+    public function deleteDocument(string $dbRid, string $collRid, string $docRid, $partitionValue = null, array $headers = [])
     {
-        $authHeaders = $this->getAuthHeaders('DELETE', 'docs', $rid_doc);
+        $authHeaders = $this->getAuthHeaders('DELETE', 'docs', $docRid);
         $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = '0';
-        if ($partitionKey !== null) {
-            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionKey);
+        if ($partitionValue !== null) {
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
         }
 
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
      * List a document's attachments.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-attachments
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listAttachments(string $rid_id, string $rid_col, string $rid_doc)
+    public function listAttachments(string $dbRid, string $collRid, string $docRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'attachments', $rid_doc);
+        $headers = $this->getAuthHeaders('GET', 'attachments', $docRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}/attachments", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Get an attachment.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/attachments
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
-     * @param string $rid_at attachment _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
+     * @param string $attachmentRid attachment _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getAttachment(string $rid_id, string $rid_col, string $rid_doc, string $rid_at)
+    public function getAttachment(string $dbRid, string $collRid, string $docRid, string $attachmentRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'attachments', $rid_at);
+        $headers = $this->getAuthHeaders('GET', 'attachments', $attachmentRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}/attachments/{$attachmentRid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Create an attachment by uploading raw media to a document.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-an-attachment
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
-     * @param string $content_type media type; ie: image/png
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
+     * @param string $contentType media type; ie: image/png
      * @param string $filename file name, sent in the Slug header
      * @param string $file raw media
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createAttachment(string $rid_id, string $rid_col, string $rid_doc, string $content_type, string $filename, string $file)
+    public function createAttachment(string $dbRid, string $collRid, string $docRid, string $contentType, string $filename, string $file)
     {
-        $headers = $this->getAuthHeaders('POST', 'attachments', $rid_doc);
+        $headers = $this->getAuthHeaders('POST', 'attachments', $docRid);
         $headers['Content-Length'] = strlen($file);
-        $headers['Content-Type'] = $content_type;
+        $headers['Content-Type'] = $contentType;
         $headers['Slug'] = urlencode($filename);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments", "POST", $headers, $file)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}/attachments", "POST", $headers, $file)->getBody()->getContents();
     }
 
     /**
      * Replace an attachment.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-an-attachment
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
-     * @param string $rid_at attachment _rid
-     * @param string $content_type media type; ie: image/png
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
+     * @param string $attachmentRid attachment _rid
+     * @param string $contentType media type; ie: image/png
      * @param string $filename file name, sent in the Slug header
      * @param string $file raw media
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceAttachment(string $rid_id, string $rid_col, string $rid_doc, string $rid_at, string $content_type, string $filename, string $file)
+    public function replaceAttachment(string $dbRid, string $collRid, string $docRid, string $attachmentRid, string $contentType, string $filename, string $file)
     {
-        $headers = $this->getAuthHeaders('PUT', 'attachments', $rid_at);
+        $headers = $this->getAuthHeaders('PUT', 'attachments', $attachmentRid);
         $headers['Content-Length'] = strlen($file);
-        $headers['Content-Type'] = $content_type;
+        $headers['Content-Type'] = $contentType;
         $headers['Slug'] = urlencode($filename);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "PUT", $headers, $file)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}/attachments/{$attachmentRid}", "PUT", $headers, $file)->getBody()->getContents();
     }
 
     /**
      * Delete an attachment.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-attachments
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_doc document _rid
-     * @param string $rid_at attachment _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $docRid document _rid
+     * @param string $attachmentRid attachment _rid
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deleteAttachment(string $rid_id, string $rid_col, string $rid_doc, string $rid_at)
+    public function deleteAttachment(string $dbRid, string $collRid, string $docRid, string $attachmentRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'attachments', $rid_at);
+        $headers = $this->getAuthHeaders('DELETE', 'attachments', $attachmentRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/docs/{$rid_doc}/attachments/{$rid_at}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}/attachments/{$attachmentRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
@@ -1077,31 +1077,31 @@ class CosmosDb
      * Get an offer.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-an-offer
-     * @param string $rid offer _rid
+     * @param string $offerRid offer _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getOffer(string $rid)
+    public function getOffer(string $offerRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'offers', $rid);
+        $headers = $this->getAuthHeaders('GET', 'offers', $offerRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/offers/{$rid}", "GET", $headers)->getBody()->getContents();
+        return $this->request("/offers/{$offerRid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Replace an offer, for example to change a collection's throughput.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-an-offer
-     * @param string $rid offer _rid
+     * @param string $offerRid offer _rid
      * @param string $json new offer definition
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceOffer(string $rid, string $json)
+    public function replaceOffer(string $offerRid, string $json)
     {
-        $headers = $this->getAuthHeaders('PUT', 'offers', $rid);
+        $headers = $this->getAuthHeaders('PUT', 'offers', $offerRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/offers/{$rid}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/offers/{$offerRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
@@ -1125,101 +1125,101 @@ class CosmosDb
      * List a user's permissions.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-permissions
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listPermissions(string $rid_id, string $rid_user)
+    public function listPermissions(string $dbRid, string $userRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'permissions', $rid_user);
+        $headers = $this->getAuthHeaders('GET', 'permissions', $userRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}/permissions", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Create a permission for a user.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-permission
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
      * @param string $json permission definition; ie: {"id": "...", "permissionMode": "Read", "resource": "..."}
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createPermission(string $rid_id, string $rid_user, string $json)
+    public function createPermission(string $dbRid, string $userRid, string $json)
     {
-        $headers = $this->getAuthHeaders('POST', 'permissions', $rid_user);
+        $headers = $this->getAuthHeaders('POST', 'permissions', $userRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}/permissions", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Get a permission.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/get-a-permission
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
-     * @param string $rid_permission permission _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
+     * @param string $permissionRid permission _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getPermission(string $rid_id, string $rid_user, string $rid_permission)
+    public function getPermission(string $dbRid, string $userRid, string $permissionRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'permissions', $rid_permission);
+        $headers = $this->getAuthHeaders('GET', 'permissions', $permissionRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}/permissions/{$permissionRid}", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Replace a permission.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-permission
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
-     * @param string $rid_permission permission _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
+     * @param string $permissionRid permission _rid
      * @param string $json new permission definition
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replacePermission(string $rid_id, string $rid_user, string $rid_permission, string $json)
+    public function replacePermission(string $dbRid, string $userRid, string $permissionRid, string $json)
     {
-        $headers = $this->getAuthHeaders('PUT', 'permissions', $rid_permission);
+        $headers = $this->getAuthHeaders('PUT', 'permissions', $permissionRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}/permissions/{$permissionRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Delete a permission.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-permission
-     * @param string $rid_id database _rid
-     * @param string $rid_user user _rid
-     * @param string $rid_permission permission _rid
+     * @param string $dbRid database _rid
+     * @param string $userRid user _rid
+     * @param string $permissionRid permission _rid
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deletePermission(string $rid_id, string $rid_user, string $rid_permission)
+    public function deletePermission(string $dbRid, string $userRid, string $permissionRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'permissions', $rid_permission);
+        $headers = $this->getAuthHeaders('DELETE', 'permissions', $permissionRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/users/{$rid_user}/permissions/{$rid_permission}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/users/{$userRid}/permissions/{$permissionRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
      * List the stored procedures in a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-stored-procedures
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listStoredProcedures(string $rid_id, string $rid_col)
+    public function listStoredProcedures(string $dbRid, string $collRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'sprocs', $rid_col);
+        $headers = $this->getAuthHeaders('GET', 'sprocs', $collRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/sprocs", "GET", $headers)->getBody()->getContents();
     }
 
     /**
@@ -1227,207 +1227,207 @@ class CosmosDb
      * stored procedure isn't necessarily safe to run twice.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/execute-a-stored-procedure
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_sproc stored procedure _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $sprocRid stored procedure _rid
      * @param string $json input parameters, as a JSON array; ie: ["Canada", 30]
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function executeStoredProcedure(string $rid_id, string $rid_col, string $rid_sproc, string $json)
+    public function executeStoredProcedure(string $dbRid, string $collRid, string $sprocRid, string $json)
     {
-        $headers = $this->getAuthHeaders('POST', 'sprocs', $rid_sproc);
+        $headers = $this->getAuthHeaders('POST', 'sprocs', $sprocRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "POST", $headers, $json, false)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/sprocs/{$sprocRid}", "POST", $headers, $json, false)->getBody()->getContents();
     }
 
     /**
      * Create a stored procedure in a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-stored-procedure
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @param string $json stored procedure definition; ie: {"id": "...", "body": "function () { ... }"}
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createStoredProcedure(string $rid_id, string $rid_col, string $json)
+    public function createStoredProcedure(string $dbRid, string $collRid, string $json)
     {
-        $headers = $this->getAuthHeaders('POST', 'sprocs', $rid_col);
+        $headers = $this->getAuthHeaders('POST', 'sprocs', $collRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/sprocs", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Replace a stored procedure.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-stored-procedure
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_sproc stored procedure _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $sprocRid stored procedure _rid
      * @param string $json new stored procedure definition
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceStoredProcedure(string $rid_id, string $rid_col, string $rid_sproc, string $json)
+    public function replaceStoredProcedure(string $dbRid, string $collRid, string $sprocRid, string $json)
     {
-        $headers = $this->getAuthHeaders('PUT', 'sprocs', $rid_sproc);
+        $headers = $this->getAuthHeaders('PUT', 'sprocs', $sprocRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/sprocs/{$sprocRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Delete a stored procedure.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-stored-procedure
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_sproc stored procedure _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $sprocRid stored procedure _rid
      * @return string empty on success
      * @throws GuzzleException
      * @todo check whether this still fails with 405 (MethodNotAllowed)
      */
-    public function deleteStoredProcedure(string $rid_id, string $rid_col, string $rid_sproc)
+    public function deleteStoredProcedure(string $dbRid, string $collRid, string $sprocRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'sprocs', $rid_sproc);
+        $headers = $this->getAuthHeaders('DELETE', 'sprocs', $sprocRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/sprocs/{$rid_sproc}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/sprocs/{$sprocRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
      * List the user-defined functions in a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-user-defined-functions
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listUserDefinedFunctions(string $rid_id, string $rid_col)
+    public function listUserDefinedFunctions(string $dbRid, string $collRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'udfs', $rid_col);
+        $headers = $this->getAuthHeaders('GET', 'udfs', $collRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/udfs", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Create a user-defined function in a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-user-defined-function
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @param string $json function definition; ie: {"id": "...", "body": "function () { ... }"}
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createUserDefinedFunction(string $rid_id, string $rid_col, string $json)
+    public function createUserDefinedFunction(string $dbRid, string $collRid, string $json)
     {
-        $headers = $this->getAuthHeaders('POST', 'udfs', $rid_col);
+        $headers = $this->getAuthHeaders('POST', 'udfs', $collRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/udfs", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Replace a user-defined function.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-user-defined-function
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_udf user-defined function _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $udfRid user-defined function _rid
      * @param string $json new function definition
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceUserDefinedFunction(string $rid_id, string $rid_col, string $rid_udf, string $json)
+    public function replaceUserDefinedFunction(string $dbRid, string $collRid, string $udfRid, string $json)
     {
-        $headers = $this->getAuthHeaders('PUT', 'udfs', $rid_udf);
+        $headers = $this->getAuthHeaders('PUT', 'udfs', $udfRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs/{$rid_udf}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/udfs/{$udfRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Delete a user-defined function.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-user-defined-function
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_udf user-defined function _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $udfRid user-defined function _rid
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deleteUserDefinedFunction(string $rid_id, string $rid_col, string $rid_udf)
+    public function deleteUserDefinedFunction(string $dbRid, string $collRid, string $udfRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'udfs', $rid_udf);
+        $headers = $this->getAuthHeaders('DELETE', 'udfs', $udfRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/udfs/{$rid_udf}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/udfs/{$udfRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
     /**
      * List the triggers in a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/list-triggers
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function listTriggers(string $rid_id, string $rid_col)
+    public function listTriggers(string $dbRid, string $collRid)
     {
-        $headers = $this->getAuthHeaders('GET', 'triggers', $rid_col);
+        $headers = $this->getAuthHeaders('GET', 'triggers', $collRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers", "GET", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/triggers", "GET", $headers)->getBody()->getContents();
     }
 
     /**
      * Create a trigger in a collection.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-trigger
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
      * @param string $json trigger definition; ie: {"id": "...", "body": "function () { ... }", "triggerType": "Pre", "triggerOperation": "All"}
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function createTrigger(string $rid_id, string $rid_col, string $json)
+    public function createTrigger(string $dbRid, string $collRid, string $json)
     {
-        $headers = $this->getAuthHeaders('POST', 'triggers', $rid_col);
+        $headers = $this->getAuthHeaders('POST', 'triggers', $collRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers", "POST", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/triggers", "POST", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Replace a trigger.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-trigger
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_trigger trigger _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $triggerRid trigger _rid
      * @param string $json new trigger definition
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function replaceTrigger(string $rid_id, string $rid_col, string $rid_trigger, string $json)
+    public function replaceTrigger(string $dbRid, string $collRid, string $triggerRid, string $json)
     {
-        $headers = $this->getAuthHeaders('PUT', 'triggers', $rid_trigger);
+        $headers = $this->getAuthHeaders('PUT', 'triggers', $triggerRid);
         $headers['Content-Length'] = strlen($json);
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers/{$rid_trigger}", "PUT", $headers, $json)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/triggers/{$triggerRid}", "PUT", $headers, $json)->getBody()->getContents();
     }
 
     /**
      * Delete a trigger.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/delete-a-trigger
-     * @param string $rid_id database _rid
-     * @param string $rid_col collection _rid
-     * @param string $rid_trigger trigger _rid
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $triggerRid trigger _rid
      * @return string empty on success
      * @throws GuzzleException
      */
-    public function deleteTrigger(string $rid_id, string $rid_col, string $rid_trigger)
+    public function deleteTrigger(string $dbRid, string $collRid, string $triggerRid)
     {
-        $headers = $this->getAuthHeaders('DELETE', 'triggers', $rid_trigger);
+        $headers = $this->getAuthHeaders('DELETE', 'triggers', $triggerRid);
         $headers['Content-Length'] = '0';
-        return $this->request("/dbs/{$rid_id}/colls/{$rid_col}/triggers/{$rid_trigger}", "DELETE", $headers)->getBody()->getContents();
+        return $this->request("/dbs/{$dbRid}/colls/{$collRid}/triggers/{$triggerRid}", "DELETE", $headers)->getBody()->getContents();
     }
 
 }
