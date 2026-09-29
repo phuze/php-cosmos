@@ -77,6 +77,19 @@ class CosmosDbCollection
 	}
 
     /**
+     * Get a document.
+     *
+     * @param string $docRid document _rid
+     * @param mixed $partitionValue partition key value
+     * @param array $headers extra headers to send with the request
+     * @return string JSON response
+     */
+    public function getDocument($docRid, $partitionValue = null, array $headers = [])
+    {
+        return $this->connection->getDocument($this->dbRid, $this->collRid, $docRid, $partitionValue, $headers);
+    }
+
+    /**
      * Create a document.
      *
      * @param string $json the document as JSON

@@ -850,13 +850,20 @@ class CosmosDb
      * @param string $dbRid database _rid
      * @param string $collRid collection _rid
      * @param string $docRid document _rid
+     * @param mixed $partitionValue partition key value
+     * @param array $headers extra headers to send with the request
      * @return string JSON response
      * @throws GuzzleException
      */
-    public function getDocument(string $dbRid, string $collRid, string $docRid)
+    public function getDocument(string $dbRid, string $collRid, string $docRid, $partitionValue = null, array $headers = [])
     {
-        $headers = $this->getAuthHeaders('GET', 'docs', $docRid);
+        $authHeaders = $this->getAuthHeaders('GET', 'docs', $docRid);
+        $headers = array_merge($headers, $authHeaders);
         $headers['Content-Length'] = '0';
+        if ($partitionValue !== null) {
+            $headers['x-ms-documentdb-partitionkey'] = $this->getPartitionKeyHeader($partitionValue);
+        }
+
         return $this->request("/dbs/{$dbRid}/colls/{$collRid}/docs/{$docRid}", "GET", $headers)->getBody()->getContents();
     }
 

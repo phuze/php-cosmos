@@ -57,6 +57,15 @@ $res = QueryBuilder::instance()
     ->toArray();
 ```
 
+## Reading a Document
+
+If you have a document's `_rid`, reading it directly is cheaper and faster than a query. Pass its partition value when the collection is partitioned.
+
+```php
+# John Doe's _rid, from Inserting and Updating.
+$doc = json_decode($collection->getDocument($rid, 'Canada'));
+```
+
 ## Cross-Partition Queries
 
 Some cross-partition queries (e.g. those with `ORDER BY`, `TOP` or aggregates) can't be served by the Cosmos DB gateway, so they're run against each partition key range in turn, and `ORDER BY` and `TOP` apply within each range rather than across the whole result.
