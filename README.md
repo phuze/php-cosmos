@@ -58,7 +58,7 @@ $users = QueryBuilder::instance()
 See the [documentation](docs/README.md) for more examples:
 
 - [Connecting](docs/connecting.md)
-- [Inserting and Updating](docs/inserting-and-updating.md)
+- [Inserting, Updating and Upserting](docs/inserting-and-updating.md)
 - [Querying](docs/querying.md)
 - [Patching](docs/patching.md)
 - [Deleting](docs/deleting.md)

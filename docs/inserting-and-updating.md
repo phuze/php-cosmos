@@ -1,8 +1,8 @@
-# Inserting and Updating
+# Inserting, Updating and Upserting
 
 These examples use the `$database` and `$collection` from [Connecting](connecting.md).
 
-`setPartitionKey()` tells `save()` and `delete()` which property holds the partition key, so they can read its value from the document. Queries and patches use `setPartitionValue()` instead.
+`setPartitionKey()` tells `save()`, `upsert()` and `delete()` which property holds the partition key, so they can read its value from the document. Queries and patches use `setPartitionValue()` instead.
 
 ## Inserting
 

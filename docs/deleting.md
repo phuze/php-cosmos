@@ -1,6 +1,6 @@
 # Deleting
 
-These examples use the `$collection` and `$customers` collections from [Inserting and Updating](inserting-and-updating.md).
+These examples use the `$collection` and `$customers` collections from [Inserting, Updating and Upserting](inserting-and-updating.md).
 
 ```php
 use Phuze\PhpCosmos\QueryBuilder;

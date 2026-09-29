@@ -1,6 +1,6 @@
 # Patching
 
-A patch changes individual properties of a document without sending the whole document. These examples patch John Doe's document from [Inserting and Updating](inserting-and-updating.md).
+A patch changes individual properties of a document without sending the whole document. These examples patch John Doe's document from [Inserting, Updating and Upserting](inserting-and-updating.md).
 
 ```php
 use Phuze\PhpCosmos\QueryBuilder;

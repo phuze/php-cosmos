@@ -68,7 +68,7 @@ $res = QueryBuilder::instance()
 If you have a document's `_rid`, reading it directly is cheaper and faster than a query. Pass its partition value when the collection is partitioned.
 
 ```php
-# John Doe's _rid, from Inserting and Updating.
+# John Doe's _rid, from Inserting, Updating and Upserting.
 $doc = json_decode($collection->getDocument($rid, 'Canada'));
 ```
 
