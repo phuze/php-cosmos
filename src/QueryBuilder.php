@@ -535,6 +535,30 @@ class QueryBuilder
         return $resultObj->_rid ?? null;
     }
 
+    /**
+     * Create a document, or replace the one with the same id and partition
+     * value. Unlike save(), the document doesn't need a _rid to be replaced.
+     *
+     * @param object|array $document
+     * @return string|null the saved document's _rid
+     * @throws Exception
+     */
+    public function upsert($document)
+    {
+        $document = (object)$document;
+        $partitionValue = $this->findPartitionValue($document);
+        $document = json_encode($document);
+
+        $result = $this->collection->upsertDocument($document, $partitionValue, $this->triggersAsHeaders("upsert"));
+        $resultObj = json_decode($result);
+
+        if (isset($resultObj->code) && isset($resultObj->message)) {
+            throw new Exception("$resultObj->code : $resultObj->message");
+        }
+
+        return $resultObj->_rid ?? null;
+    }
+
     /* patch */
 
     /**
@@ -714,7 +738,7 @@ class QueryBuilder
     /**
      * Run a pre or post trigger with an operation.
      *
-     * @param string $operation all, create, delete, replace or patch
+     * @param string $operation all, create, delete, replace, patch or upsert
      * @param string $type pre or post
      * @param string $id trigger id
      * @return $this
@@ -723,7 +747,7 @@ class QueryBuilder
     public function addTrigger(string $operation, string $type, string $id)
     {
         $operation = strtolower($operation);
-        if (!in_array($operation, ["all", "create", "delete", "replace", "patch"]))
+        if (!in_array($operation, ["all", "create", "delete", "replace", "patch", "upsert"]))
             throw new Exception("Trigger: Invalid operation \"{$operation}\"");
 
         $type = strtolower($type);
@@ -741,14 +765,14 @@ class QueryBuilder
      * Get the trigger headers for an operation, including triggers added for
      * all operations.
      *
-     * @param string $operation create, delete, replace or patch
+     * @param string $operation create, delete, replace, patch or upsert
      * @return array
      */
     protected function triggersAsHeaders(string $operation)
     {
         $headers = [];
 
-        // Add headers for the current operation type at $operation (create|delete|replace|patch)
+        // Add headers for the current operation type at $operation (create|delete|replace|patch|upsert)
         if (isset($this->triggers[$operation])) {
             foreach ($this->triggers[$operation] as $name => $ids) {
                 $ids = is_array($ids) ? $ids : [$ids];

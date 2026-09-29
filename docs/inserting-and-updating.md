@@ -32,7 +32,7 @@ $customerRid = QueryBuilder::instance()
 
 ## Updating
 
-`save()` with an existing document's `_rid` replaces the whole document. To change only some properties, see [Patching](patching.md).
+`save()` with an existing document's `_rid` replaces the whole document. To replace a document without its `_rid`, see [Upserting](#upserting). To change only some properties, see [Patching](patching.md).
 
 ```php
 use Phuze\PhpCosmos\QueryBuilder;
@@ -47,4 +47,32 @@ $rid = QueryBuilder::instance()
         'age'     => 23,
         'country' => 'Canada'
     ]);
+```
+
+## Upserting
+
+`upsert()` creates a document, or replaces the one with the same `id` in the same partition. Unlike `save()`, it doesn't need the document's `_rid`, so it suits documents whose `id` you already know. It returns the document's `_rid`.
+
+```php
+use Phuze\PhpCosmos\QueryBuilder;
+
+$query = QueryBuilder::instance()
+    ->setCollection($collection)
+    ->setPartitionKey('country');
+
+# No document in the Canada partition has id 3, so this creates one.
+$query->upsert([
+    'id'      => '3',
+    'name'    => 'Mary Major',
+    'age'     => 34,
+    'country' => 'Canada'
+]);
+
+# Now one does, so this replaces it.
+$query->upsert([
+    'id'      => '3',
+    'name'    => 'Mary Major',
+    'age'     => 35,
+    'country' => 'Canada'
+]);
 ```

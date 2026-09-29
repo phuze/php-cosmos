@@ -90,6 +90,20 @@ class CosmosDbCollection
     }
 
     /**
+     * Create a document, or replace the one with the same id and partition
+     * key value.
+     *
+     * @param string $json the document as JSON
+     * @param mixed $partitionValue partition key value
+     * @param array $headers extra headers to send with the request
+     * @return string JSON response
+     */
+    public function upsertDocument($json, $partitionValue = null, array $headers = [])
+    {
+        return $this->connection->upsertDocument($this->dbRid, $this->collRid, $json, $partitionValue, $headers);
+    }
+
+    /**
      * Replace a document.
      *
      * @param string $docRid document _rid

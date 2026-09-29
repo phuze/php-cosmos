@@ -885,6 +885,25 @@ class CosmosDb
     }
 
     /**
+     * Create a document, or replace the one with the same id and partition
+     * key value.
+     *
+     * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/create-a-document
+     * @param string $dbRid database _rid
+     * @param string $collRid collection _rid
+     * @param string $json the document as JSON
+     * @param mixed $partitionValue partition key value
+     * @param array $headers extra headers to send with the request
+     * @return string JSON response
+     * @throws GuzzleException
+     */
+    public function upsertDocument(string $dbRid, string $collRid, string $json, $partitionValue = null, array $headers = [])
+    {
+        $headers['x-ms-documentdb-is-upsert'] = 'True';
+        return $this->createDocument($dbRid, $collRid, $json, $partitionValue, $headers);
+    }
+
+    /**
      * Replace a document.
      *
      * @link https://learn.microsoft.com/en-us/rest/api/cosmos-db/replace-a-document
